@@ -27,18 +27,29 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Generate CI keystore
+      - name: Setup keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore "$HOME/release-key.jks" \
-            -alias release \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=CI,OU=CI,O=CI,L=Unknown,ST=Unknown,C=US"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding keystore from secrets..."
+            echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release-key.jks"
+          else
+            echo "No KEYSTORE_BASE64 secret found, generating temporary keystore..."
+            keytool -genkeypair -v \
+              -keystore "$HOME/release-key.jks" \
+              -alias release \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=CI,OU=CI,O=CI,L=Unknown,ST=Unknown,C=US"
+          fi
           echo "KEYSTORE_FILE=$HOME/release-key.jks" >> $GITHUB_ENV
-          echo "KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
-          echo "KEY_ALIAS=release" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD:-android}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${KEY_ALIAS:-release}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${KEY_PASSWORD:-android}" >> $GITHUB_ENV
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

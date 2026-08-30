@@ -1,6 +1,9 @@
 # E-Ink Launcher Reborn
 
-专为墨水屏设备打造的极简启动器，基于 [E-Ink Launcher](https://github.com/nicehash/E-Ink-Launcher) 重构。
+专为墨水屏设备打造的极简启动器。
+
+- 原项目：[E-Ink Launcher](https://github.com/nicehash/E-Ink-Launcher)（by Modificator）
+- 本 fork：https://github.com/ACG-Q/elinkLaun-Reborn
 
 ## 功能
 
@@ -20,7 +23,7 @@
 
 从 [Releases](https://github.com/ACG-Q/elinkLaun-Reborn/releases) 下载最新 APK。
 
-## 构建
+## 本地构建
 
 ```bash
 git clone https://github.com/ACG-Q/elinkLaun-Reborn.git
@@ -28,61 +31,69 @@ cd elinkLaun-Reborn
 ./gradlew assembleRelease
 ```
 
-APK 输出路径：`app/build/outputs/apk/release/`
+APK 输出路径：`app/build/outputs/apk/release/app-release.apk`
+
+> 注意：首次本地构建 Release 版本需要自行配置签名，否则输出为 `app-release-unsigned.apk`（无法直接安装）。
 
 ## 在线构建（GitHub Actions）
 
-本仓库配置了 GitHub Actions，推送到 `master` 分支或推送 `v*` 标签时会自动构建 Release APK：
+本仓库配置了 GitHub Actions，无需本地环境即可自动构建 Release APK。
+
+### 触发方式
 
 | 触发方式 | 结果 |
 |----------|------|
 | 推送到 `master` 分支 | APK 上传到 Actions Artifacts（保留 30 天） |
-| 推送 `v*` 标签（如 `v0.2.0`） | APK 上传到 Artifacts + 发布到 GitHub Releases |
-| 手动触发 | 进入 Actions 页面点击 **Run workflow** |
+| 推送 `v*` 标签（如 `git tag v0.2.0 && git push origin v0.2.0`） | APK 上传到 Artifacts + 发布到 GitHub Releases |
+| 手动触发 | 进入 Actions 页面 → Build & Release → Run workflow |
+
+### 下载构建产物
+
+1. 进入仓库 **Actions** 页面
+2. 选择对应的工作流运行记录
+3. 在页面底部 **Artifacts** 区域下载 APK
+
+### 使用自己的签名构建（推荐）
+
+默认情况下，GitHub Actions 会使用临时生成的签名证书。这意味着每次构建的签名都不同，**CI 构建之间无法互相覆盖更新**。
+
+如果你 fork 了本仓库并希望用自己的签名持续构建（保证可更新），请按以下步骤配置：
+
+#### 1. 生成签名密钥
 
 ```bash
-# 推送到 master 触发构建
-git push origin master
-
-# 打 tag 触发构建并发布 Release
-git tag v0.2.0
-git push origin v0.2.0
+keytool -genkeypair -v \
+  -keystore my-release-key.jks \
+  -alias release \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass <你的密码> -keypass <你的密码> \
+  -dname "CN=你的名字, OU=你的组织, O=你的公司, L=城市, ST=省份, C=国家代码"
 ```
 
-构建产物可在 GitHub 仓库的 **Actions** 页面下载。
+#### 2. 转为 Base64
 
-### Fork 后使用自己的签名构建
-
-如果你 fork 了本仓库并希望通过 GitHub Actions 用**自己的签名**构建，可以修改 `.github/workflows/build.yml`：
-
-1. 删除或注释掉 **Generate CI keystore** 步骤
-2. 添加 **Decode keystore from secrets** 步骤，将你的 keystore base64 通过 GitHub Secrets 传入：
-
-```yaml
-- name: Decode keystore from secrets
-  run: |
-    echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release-key.jks"
-    echo "KEYSTORE_FILE=$HOME/release-key.jks" >> $GITHUB_ENV
-    echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
-    echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
-    echo "KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
-  env:
-    KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-    KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-    KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-    KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+**Linux / macOS：**
+```bash
+base64 -i my-release-key.jks | tr -d '\n' > keystore_base64.txt
 ```
 
-然后在仓库 **Settings → Secrets and variables → Actions** 中添加以下 4 个 secret：
+**Windows（PowerShell）：**
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release-key.jks")) | Set-Content keystore_base64.txt
+```
+
+#### 3. 添加 GitHub Secrets
+
+进入你的 fork 仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，添加以下 4 个 secret：
 
 | Secret 名称 | 值 |
 |-------------|-----|
-| `KEYSTORE_BASE64` | 你的 keystore 文件 base64 编码 |
+| `KEYSTORE_BASE64` | 上一步生成的 base64 字符串（整行，不要换行） |
 | `KEYSTORE_PASSWORD` | keystore 密码 |
 | `KEY_ALIAS` | key 别名（如 `release`） |
 | `KEY_PASSWORD` | key 密码 |
 
-> 生成 base64：`base64 -i my-release-key.jks | tr -d '\n'`（Linux/macOS）或 `[Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release-key.jks"))`（PowerShell）
+> 配置后，所有 CI 构建都将使用同一份签名，保证 APK 可以互相覆盖更新。
 
 ## 自定义图标
 
