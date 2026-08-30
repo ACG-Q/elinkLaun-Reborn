@@ -3,25 +3,40 @@ plugins {
 }
 
 android {
-    namespace = "cn.modificator.launcher"
+    namespace = "io.github.reborn.einklauncher"
     compileSdk = 36
     enableKotlin = false
 
     defaultConfig {
-        applicationId = "cn.modificator.launcher"
+        applicationId = "io.github.reborn.einklauncher"
         minSdk = 14
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.1.8.6"
+        versionCode = 31
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val ksFile = System.getenv("KEYSTORE_FILE")
+            if (ksFile != null && file(ksFile).exists()) {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            val ksFile = System.getenv("KEYSTORE_FILE")
+            if (ksFile != null && file(ksFile).exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -43,6 +58,4 @@ android {
 
 dependencies {
     implementation("androidx.core:core:1.12.0")
-    implementation("org.apache.ftpserver:ftplet-api:1.2.1")
-    implementation("org.apache.ftpserver:ftpserver-core:1.2.1")
 }

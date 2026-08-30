@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">E-Ink Launcher</string>
+    <string name="app_name">E-Ink Launcher Reborn</string>
     <string name="file_manager">Menedżer plików</string>
 
     <string name="empty_directory_hint">Pusty folder</string>
@@ -49,6 +49,7 @@
     <string name="wifi_status_opening">Włączanie WiFi</string>
     <string name="wifi_status_on">WiFi wł.</string>
     <string name="wifi_status_connected">WiFi połączone:%s</string>
+    <string name="wifi_status_connected_plain">WiFi połączone</string>
     <string name="wifi_status_connecting">Łączenie WiFi</string>
     <string name="wifi_status_disconnected">WiFi wyłączone</string>
     <string name="wifi_status_disconnecting">Rozłączanie WiFi</string>
@@ -61,6 +62,13 @@
     </string-array>
     <string name="power_title">现在可以操作电源了哦~</string>
     <string name="setting_help_and_about">Pomoc i informacje</string>
+    <string name="about_features">Funkcje：\n• Uruchamiacz aplikacji z konfigurowalną siatką\n• Regulacja rozmiaru czcionki nazw aplikacji\n• Sortowanie według nazwy/czasu instalacji/używania\n• Ukrywanie lub odinstalowywanie aplikacji\n• Blokada ekranu jednym dotknięciem\n• Włączanie/Wyłączanie WiFi jednym dotknięciem\n• Własna zamiana ikon\n• Wbudowany transfer plików HTTP</string>
+    <string name="about_custom_icon_title">Własne ikony</string>
+    <string name="about_custom_icon_info">Przytrzymaj ikonę aplikacji, aby zobaczyć jej nazwę pakietu.\nZmień nazwę pliku ikony na odpowiadającą nazwę pakietu i umieść go w poniższym katalogu.</string>
+    <string name="about_custom_icon_filenames">Nazwy plików ikon：\nBlokada ekranu：E-ink_Launcher.Lock.png\nWiFi wł.：E-ink_Launcher.WifiOn.png\nWiFi wył.：E-ink_Launcher.WifiOff.png</string>
+    <string name="about_icon_path">Katalog：Documents/E-Ink Launcher/icon/</string>
+    <string name="about_developers">Deweloperzy</string>
+    <string name="about_developer_info">Oryginalny：Modificator (yunshangcn@gmail.com)\nAktualny：六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
     <string name="path">Ścieżka</string>
     <string name="default_path_setting">Domyślna ścieżka</string>
     <string name="dialog_confim">Potwierdź</string>

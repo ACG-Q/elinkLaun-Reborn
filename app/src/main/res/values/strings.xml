@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">E-Ink Launcher</string>
+    <string name="app_name">E-Ink Launcher Reborn</string>
     <string name="file_manager">File Manager</string>
 
     <string name="empty_directory_hint">Empty directory</string>
@@ -49,6 +49,7 @@
     <string name="wifi_status_opening">WiFi opening</string>
     <string name="wifi_status_on">WiFi ON</string>
     <string name="wifi_status_connected">WiFi connected:%s</string>
+    <string name="wifi_status_connected_plain">WiFi connected</string>
     <string name="wifi_status_connecting">WiFi connecting</string>
     <string name="wifi_status_disconnected">WiFi disconnected</string>
     <string name="wifi_status_disconnecting">WiFi disconnecting</string>
@@ -63,9 +64,14 @@
         <item>Reboot</item>
     </string-array>
     <string name="power_title" translatable="false">现在可以操作电源了哦~</string>
-    <string name="oh_no">混淆有毛用啊，文件这么少,代码渣貌似也能增加难度,不想加固，加固有问题，大哥我这就署名有价值，反编译别把我名字去了- -</string>
-    <string name="come_on">给点赏钱吧，支付鸨就行，账号是邮箱</string>
     <string name="setting_help_and_about">Help &amp; About</string>
+    <string name="about_features">Features:\n• App launcher with customizable grid\n• App name font size adjustment\n• Sort by name / install time / usage\n• Hide or uninstall apps\n• One-tap lock screen\n• One-tap WiFi toggle\n• Custom icon replacement\n• Built-in HTTP file transfer</string>
+    <string name="about_custom_icon_title">Custom Icons</string>
+    <string name="about_custom_icon_info">Long press any app icon to see its package name.\nRename your icon file to match the package name, then place it in the directory below.</string>
+    <string name="about_custom_icon_filenames">Custom icon file names:\nLock Screen:  E-ink_Launcher.Lock.png\nWiFi ON:     E-ink_Launcher.WifiOn.png\nWiFi OFF:    E-ink_Launcher.WifiOff.png</string>
+    <string name="about_icon_path">Directory: Documents/E-Ink Launcher/icon/</string>
+    <string name="about_developers">Developers</string>
+    <string name="about_developer_info">Original: Modificator (yunshangcn@gmail.com)\nCurrent: 六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
     <string name="path">Path</string>
     <string name="default_path_setting">Default Path</string>
     <string name="dialog_confim">Confim</string>

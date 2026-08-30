@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_manager_finish">완료</string>
-    <string name="app_name">E-Ink Launcher</string>
+    <string name="app_name">E-Ink Launcher Reborn</string>
     <string name="battery_charging">충전 중</string>
     <string name="battery_full">충전 완료</string>
     <string name="battery_heat">과열</string>
@@ -31,6 +31,13 @@
  &#8212; WiFi 연결 없음"</string>
     <string name="setting_column_icons">열</string>
     <string name="setting_help_and_about">도움말 &amp; 정보</string>
+    <string name="about_features">기능 소개：\n• 앱 런처, 사용자 지정 격자 레이아웃 지원\n• 앱 이름 글꼴 크기 조정\n• 이름/설치 시간/사용 빈도별 정렬\n• 앱 숨기기 또는 제거\n• 원터치 화면 잠금\n• 원터치 WiFi 켜기/끄기\n• 사용자 지정 아이콘 교체\n• 내장 HTTP 파일 전송</string>
+    <string name="about_custom_icon_title">사용자 지정 아이콘</string>
+    <string name="about_custom_icon_info">앱 아이콘을 길게 눌러 패키지 이름을 확인할 수 있습니다.\n아이콘 파일을 해당 패키지 이름으로 변경한 후 아래 디렉토리에 넣으세요.</string>
+    <string name="about_custom_icon_filenames">사용자 지정 아이콘 파일명：\n화면 잠금：E-ink_Launcher.Lock.png\nWiFi 켜짐：E-ink_Launcher.WifiOn.png\nWiFi 꺼짐：E-ink_Launcher.WifiOff.png</string>
+    <string name="about_icon_path">디렉토리：Documents/E-Ink Launcher/icon/</string>
+    <string name="about_developers">개발자</string>
+    <string name="about_developer_info">원 개발자：Modificator (yunshangcn@gmail.com)\n현 개발자：六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
     <string name="setting_hide_divider">구분선 숨김</string>
     <string name="setting_row_icons">"   행   "</string>
     <string name="setting_set_font_size">폰트 크기 설정</string>
@@ -52,6 +59,7 @@
     <string name="type_word">문서</string>
     <string name="wifi_status_closing">WiFi 닫는 중</string>
     <string name="wifi_status_connected">WiFi 연결: %s</string>
+    <string name="wifi_status_connected_plain">WiFi 연결됨</string>
     <string name="wifi_status_connecting">WiFi 연결 중</string>
     <string name="wifi_status_disconnected">WiFi 연결 해제</string>
     <string name="wifi_status_disconnecting">WiFi 연결 해제 중</string>

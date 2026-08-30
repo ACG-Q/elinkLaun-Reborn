@@ -1,15 +1,49 @@
+# Android
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+/build/
+/app/build/
+/captures/
+/externalNativeBuild/
+/.cxx/
+
+# Gradle
+.gradle/
+/config.gradle
+local.properties
+gradle-app.setting
+!gradle-wrapper.jar
+
+# IDE
+.idea/
 *.iml
-.gradle
-/local.properties
 /.idea/workspace.xml
 /.idea/libraries
-.DS_Store
-/build
-/captures
-*.apk
-projectFilesBackup
 /.idea/sonarlint/issuestore
-.idea
-config.gradle
+.project
+.classpath
+.settings/
+nbproject/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Signing
+*.jks
+*.keystore
 KeyStore.key
+
+# Release
 release/output.json
+
+# Project
+projectFilesBackup
+screen.png
+
+# Proguard
+/proguard/

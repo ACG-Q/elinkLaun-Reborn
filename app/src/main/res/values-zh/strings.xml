@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">E-Ink Launcher</string>
+    <string name="app_name">E-Ink Launcher Reborn</string>
     <string name="file_manager">文件浏览</string>
 
     <string name="empty_directory_hint">空文件夹</string>
@@ -45,6 +45,7 @@
     <string name="wifi_status_opening">WiFi 正在开启</string>
     <string name="wifi_status_on">WiFi 已开启</string>
     <string name="wifi_status_connected">WiFi 已连接:%s</string>
+    <string name="wifi_status_connected_plain">WiFi 已连接</string>
     <string name="wifi_status_connecting">WiFi 连接中</string>
     <string name="wifi_status_disconnected">WiFi 已断开</string>
     <string name="wifi_status_disconnecting">WiFi 断开中</string>
@@ -59,6 +60,13 @@
     <string name="setting_cloud_manager_off">网络传书 （关）</string>
     <string name="setting_cloud_manager_wifi_off">网络传书 （请连接WIFI）</string>
     <string name="setting_help_and_about">帮助 &amp; 关于</string>
+    <string name="about_features">功能介绍：\n• 应用启动器，支持自定义网格布局\n• 应用名称字体大小调整\n• 按名称/安装时间/使用频率排序\n• 隐藏或卸载应用\n• 一键锁屏\n• 一键开关 WiFi\n• 自定义图标替换\n• 内置 HTTP 文件传输</string>
+    <string name="about_custom_icon_title">自定义图标</string>
+    <string name="about_custom_icon_info">长按任意应用图标可查看其包名。\n将图标文件重命名为对应包名，然后放到以下目录即可。</string>
+    <string name="about_custom_icon_filenames">自定义图标文件名：\n一键锁屏：E-ink_Launcher.Lock.png\nWiFi 开启：E-ink_Launcher.WifiOn.png\nWiFi 关闭：E-ink_Launcher.WifiOff.png</string>
+    <string name="about_icon_path">目录：Documents/E-Ink Launcher/icon/</string>
+    <string name="about_developers">开发者</string>
+    <string name="about_developer_info">原开发者：Modificator (yunshangcn@gmail.com)\n现开发者：六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
     <string name="path">路径</string>
     <string name="default_path_setting">设置默认路径</string>
     <string name="dialog_confim">确认</string>

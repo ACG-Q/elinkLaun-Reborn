@@ -29,7 +29,7 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name="cn.modificator.launcher.Launcher"
+            android:name="io.github.reborn.einklauncher.Launcher"
             android:launchMode="singleInstance"
             android:exported="true">
             <intent-filter>
@@ -45,7 +45,7 @@
         </activity>
 
         <service
-            android:name=".ftpservice.FTPService"
+            android:name=".ftpservice.HttpService"
             android:enabled="true"
             android:exported="true" />
 
