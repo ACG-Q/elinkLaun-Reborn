@@ -6,6 +6,7 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -27,7 +28,6 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Generate CI keystore
-        if: ${{ !secrets.KEYSTORE_BASE64 }}
         run: |
           keytool -genkeypair -v \
             -keystore "$HOME/release-key.jks" \
@@ -40,25 +40,16 @@ jobs:
           echo "KEY_ALIAS=release" >> $GITHUB_ENV
           echo "KEY_PASSWORD=android" >> $GITHUB_ENV
 
-      - name: Decode keystore from secrets
-        if: ${{ secrets.KEYSTORE_BASE64 }}
-        run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release-key.jks"
-          echo "KEYSTORE_FILE=$HOME/release-key.jks" >> $GITHUB_ENV
-          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
-          echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
 
       - name: Find APK
         id: find-apk
