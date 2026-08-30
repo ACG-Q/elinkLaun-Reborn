@@ -38,6 +38,7 @@ APK 输出路径：`app/build/outputs/apk/release/`
 |----------|------|
 | 推送到 `master` 分支 | APK 上传到 Actions Artifacts（保留 30 天） |
 | 推送 `v*` 标签（如 `v0.2.0`） | APK 上传到 Artifacts + 发布到 GitHub Releases |
+| 手动触发 | 进入 Actions 页面点击 **Run workflow** |
 
 ```bash
 # 推送到 master 触发构建
@@ -52,47 +53,36 @@ git push origin v0.2.0
 
 ### Fork 后使用自己的签名构建
 
-如果你 fork 了本仓库并希望通过 GitHub Actions 用**自己的签名**构建，需要配置以下 4 个 GitHub Secrets：
+如果你 fork 了本仓库并希望通过 GitHub Actions 用**自己的签名**构建，可以修改 `.github/workflows/build.yml`：
 
-#### 步骤 1：生成签名密钥
+1. 删除或注释掉 **Generate CI keystore** 步骤
+2. 添加 **Decode keystore from secrets** 步骤，将你的 keystore base64 通过 GitHub Secrets 传入：
 
-```bash
-keytool -genkeypair -v \
-  -keystore my-release-key.jks \
-  -alias release \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -storepass <你的密码> -keypass <你的密码> \
-  -dname "CN=你的名字, OU=你的组织, O=你的公司, L=城市, ST=省份, C=国家代码"
+```yaml
+- name: Decode keystore from secrets
+  run: |
+    echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release-key.jks"
+    echo "KEYSTORE_FILE=$HOME/release-key.jks" >> $GITHUB_ENV
+    echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+    echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+    echo "KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
+  env:
+    KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+    KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+    KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+    KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 ```
 
-#### 步骤 2：转为 Base64
-
-**Linux / macOS：**
-```bash
-base64 -i my-release-key.jks | tr -d '\n' > keystore_base64.txt
-```
-
-**Windows（PowerShell）：**
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release-key.jks")) | Set-Content keystore_base64.txt
-```
-
-#### 步骤 3：添加 Secrets
-
-进入你的 fork 仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，添加以下 4 个 secret：
+然后在仓库 **Settings → Secrets and variables → Actions** 中添加以下 4 个 secret：
 
 | Secret 名称 | 值 |
 |-------------|-----|
-| `KEYSTORE_BASE64` | 上一步生成的 base64 字符串 |
+| `KEYSTORE_BASE64` | 你的 keystore 文件 base64 编码 |
 | `KEYSTORE_PASSWORD` | keystore 密码 |
-| `KEY_ALIAS` | `release` |
+| `KEY_ALIAS` | key 别名（如 `release`） |
 | `KEY_PASSWORD` | key 密码 |
 
-> 如果只配置了 `KEYSTORE_BASE64` 而**没有配置其他 3 个**，GitHub Actions 会使用默认密码 `android` 和别名 `release`（仅 CI 临时签名，不推荐用于正式发布）。
-
-#### 步骤 4：触发构建
-
-配置完成后，推送到 `master` 或打 `v*` 标签即可触发带签名的构建。
+> 生成 base64：`base64 -i my-release-key.jks | tr -d '\n'`（Linux/macOS）或 `[Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release-key.jks"))`（PowerShell）
 
 ## 自定义图标
 
