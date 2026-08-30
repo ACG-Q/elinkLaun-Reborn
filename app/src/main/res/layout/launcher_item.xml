@@ -24,7 +24,7 @@
                 android:layout_height="0.1dp"
                 android:layout_weight="1" />
 
-            <cn.modificator.launcher.widgets.RatioImageView
+            <io.github.reborn.einklauncher.widgets.RatioImageView
                 android:id="@+id/appImage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -40,7 +40,7 @@
                 android:layout_weight="1" />
         </LinearLayout>
 
-        <cn.modificator.launcher.widgets.ObserverFontTextView
+        <io.github.reborn.einklauncher.widgets.ObserverFontTextView
             android:id="@+id/appName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -62,7 +62,7 @@
         android:visibility="invisible">
 
 
-        <cn.modificator.launcher.widgets.RatioImageView
+        <io.github.reborn.einklauncher.widgets.RatioImageView
             android:id="@+id/menu_delete"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -78,7 +78,7 @@
             android:background="#000000"
             android:visibility="gone" />
 
-        <cn.modificator.launcher.widgets.RatioImageView
+        <io.github.reborn.einklauncher.widgets.RatioImageView
             android:id="@+id/menu_hide"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

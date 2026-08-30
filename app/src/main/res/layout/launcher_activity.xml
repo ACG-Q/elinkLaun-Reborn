@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <cn.modificator.launcher.widgets.EInkLauncherView
+    <io.github.reborn.einklauncher.widgets.EInkLauncherView
         android:id="@+id/mList"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -12,7 +12,7 @@
         android:layout_marginLeft="10dp"
         android:layout_marginRight="10dp"
         android:layout_marginTop="10dp"
-        android:layout_weight="1"></cn.modificator.launcher.widgets.EInkLauncherView>
+        android:layout_weight="1"></io.github.reborn.einklauncher.widgets.EInkLauncherView>
 
     <View
         android:layout_width="match_parent"
@@ -56,7 +56,7 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
-                <cn.modificator.launcher.widgets.BatteryView
+                <io.github.reborn.einklauncher.widgets.BatteryView
                     android:id="@+id/batteryProgress"
                     android:layout_width="25dp"
                     android:layout_height="25dp" />

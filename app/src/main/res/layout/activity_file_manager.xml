@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context="cn.modificator.launcher.filemanager.FileManager">
+    tools:context="io.github.reborn.einklauncher.filemanager.FileManager">
 
     <LinearLayout
         android:layout_width="match_parent"
