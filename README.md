@@ -30,6 +30,70 @@ cd elinkLaun-Reborn
 
 APK 输出路径：`app/build/outputs/apk/release/`
 
+## 在线构建（GitHub Actions）
+
+本仓库配置了 GitHub Actions，推送到 `master` 分支或推送 `v*` 标签时会自动构建 Release APK：
+
+| 触发方式 | 结果 |
+|----------|------|
+| 推送到 `master` 分支 | APK 上传到 Actions Artifacts（保留 30 天） |
+| 推送 `v*` 标签（如 `v0.2.0`） | APK 上传到 Artifacts + 发布到 GitHub Releases |
+
+```bash
+# 推送到 master 触发构建
+git push origin master
+
+# 打 tag 触发构建并发布 Release
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+构建产物可在 GitHub 仓库的 **Actions** 页面下载。
+
+### Fork 后使用自己的签名构建
+
+如果你 fork 了本仓库并希望通过 GitHub Actions 用**自己的签名**构建，需要配置以下 4 个 GitHub Secrets：
+
+#### 步骤 1：生成签名密钥
+
+```bash
+keytool -genkeypair -v \
+  -keystore my-release-key.jks \
+  -alias release \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass <你的密码> -keypass <你的密码> \
+  -dname "CN=你的名字, OU=你的组织, O=你的公司, L=城市, ST=省份, C=国家代码"
+```
+
+#### 步骤 2：转为 Base64
+
+**Linux / macOS：**
+```bash
+base64 -i my-release-key.jks | tr -d '\n' > keystore_base64.txt
+```
+
+**Windows（PowerShell）：**
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release-key.jks")) | Set-Content keystore_base64.txt
+```
+
+#### 步骤 3：添加 Secrets
+
+进入你的 fork 仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，添加以下 4 个 secret：
+
+| Secret 名称 | 值 |
+|-------------|-----|
+| `KEYSTORE_BASE64` | 上一步生成的 base64 字符串 |
+| `KEYSTORE_PASSWORD` | keystore 密码 |
+| `KEY_ALIAS` | `release` |
+| `KEY_PASSWORD` | key 密码 |
+
+> 如果只配置了 `KEYSTORE_BASE64` 而**没有配置其他 3 个**，GitHub Actions 会使用默认密码 `android` 和别名 `release`（仅 CI 临时签名，不推荐用于正式发布）。
+
+#### 步骤 4：触发构建
+
+配置完成后，推送到 `master` 或打 `v*` 标签即可触发带签名的构建。
+
 ## 自定义图标
 
 长按应用图标可查看包名。将图标文件重命名为对应包名，放到以下目录：
