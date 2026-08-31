@@ -1,6 +1,9 @@
 package io.github.reborn.einklauncher.ftpservice;
 
 import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
@@ -115,6 +118,7 @@ public class HttpService extends Service {
       serverSocket.setReuseAddress(true);
       threadPool = Executors.newCachedThreadPool();
       running = true;
+      startForegroundWithNotification("Listening on port " + port);
       sendBroadcast(new Intent(ACTION_STARTED));
       Log.i(TAG, "HTTP server started on port " + port);
 
@@ -1176,6 +1180,7 @@ public class HttpService extends Service {
     if (threadPool != null) {
       threadPool.shutdownNow();
     }
+    stopForeground(true);
     sendBroadcast(new Intent(ACTION_STOPPED));
     Log.i(TAG, "HTTP server stopped");
     super.onDestroy();
@@ -1206,6 +1211,41 @@ public class HttpService extends Service {
   public void onCreate() {
     super.onCreate();
     instance = this;
+    createNotificationChannel();
+  }
+
+  private static final String CHANNEL_ID = "http_server";
+
+  private void createNotificationChannel() {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      NotificationChannel channel = new NotificationChannel(
+          CHANNEL_ID, "HTTP Server", NotificationManager.IMPORTANCE_LOW);
+      channel.setDescription("HTTP file server status");
+      NotificationManager nm = getSystemService(NotificationManager.class);
+      if (nm != null) nm.createNotificationChannel(channel);
+    }
+  }
+
+  private void startForegroundWithNotification(String text) {
+    Intent stopIntent = new Intent(this, HttpService.class);
+    stopIntent.setAction(ACTION_STOP_HTTPSERVER);
+    PendingIntent stopPi = PendingIntent.getService(this, 2, stopIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+    Notification.Builder builder;
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      builder = new Notification.Builder(this, CHANNEL_ID);
+    } else {
+      builder = new Notification.Builder(this);
+    }
+    Notification notification = builder
+        .setSmallIcon(android.R.drawable.ic_menu_manage)
+        .setContentTitle("E-Ink HTTP Server")
+        .setContentText(text)
+        .setContentIntent(stopPi)
+        .setOngoing(true)
+        .build();
+    startForeground(1, notification);
   }
 
   public static int getPort() {
