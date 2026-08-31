@@ -188,9 +188,127 @@ public class HttpService extends Service {
     }
   }
 
+  // ===== Shared CSS & Components =====
+
+  private static final String CSS = "*{margin:0;padding:0;box-sizing:border-box;}"
+      + "body{font-family:system-ui,-apple-system,sans-serif;background:#f0f0f0;color:#1a1a1a;"
+      + "min-height:100dvh;padding-bottom:64px;-webkit-tap-highlight-color:transparent;}"
+      + "a{color:#1a73e8;text-decoration:none;}"
+      + ".topbar{position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e0e0e0;"
+      + "padding:12px 16px;display:flex;align-items:center;gap:12px;}"
+      + ".topbar h1{font-size:18px;font-weight:700;flex:1;}"
+      + ".topbar .back{width:40px;height:40px;display:flex;align-items:center;justify-content:center;"
+      + "border:none;background:none;cursor:pointer;border-radius:8px;flex-shrink:0;}"
+      + ".topbar .back:active{background:#f0f0f0;}"
+      + ".nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;"
+      + "border-top:1px solid #e0e0e0;display:flex;height:56px;}"
+      + ".nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;"
+      + "gap:2px;font-size:10px;color:#666;text-decoration:none;transition:color .15s;}"
+      + ".nav a.active{color:#1a73e8;font-weight:600;}"
+      + ".nav svg{width:22px;height:22px;}"
+      + ".content{padding:16px;max-width:600px;margin:0 auto;}"
+      + ".card{background:#fff;border-radius:12px;border:1px solid #e0e0e0;overflow:hidden;}"
+      + ".card+.card{margin-top:12px;}"
+      + ".card-header{padding:16px;font-weight:600;font-size:15px;border-bottom:1px solid #f0f0f0;}"
+      + ".btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;"
+      + "padding:10px 20px;border-radius:8px;border:1px solid #e0e0e0;background:#fff;"
+      + "font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;min-height:44px;}"
+      + ".btn:active{transform:scale(0.97);}"
+      + ".btn-primary{background:#1a73e8;color:#fff;border-color:#1a73e8;}"
+      + ".btn-primary:active{background:#1557b0;}"
+      + ".btn-danger{color:#d93025;border-color:#d93025;}"
+      + ".btn-danger:active{background:#d93025;color:#fff;}"
+      + ".btn-sm{padding:6px 12px;font-size:12px;min-height:32px;border-radius:6px;}"
+      + ".row{padding:12px 16px;display:flex;align-items:center;gap:12px;min-height:48px;}"
+      + ".row+.row{border-top:1px solid #f0f0f0;}"
+      + ".row:active{background:#f8f9fa;}"
+      + ".row-icon{width:20px;height:20px;color:#666;flex-shrink:0;}"
+      + ".row-text{flex:1;min-width:0;}"
+      + ".row-title{font-size:14px;font-weight:500;word-break:break-all;}"
+      + ".row-sub{font-size:12px;color:#888;margin-top:2px;}"
+      + ".row-action{flex-shrink:0;color:#888;}"
+      + ".badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}"
+      + ".badge-blue{background:#e8f0fe;color:#1a73e8;}"
+      + ".badge-green{background:#e6f4ea;color:#1e8e3e;}"
+      + ".badge-red{background:#fce8e6;color:#d93025;}"
+      + ".empty{text-align:center;padding:48px 16px;color:#888;}"
+      + ".empty svg{width:48px;height:48px;margin-bottom:12px;opacity:0.4;}"
+      + ".empty p{font-size:14px;margin-top:8px;}"
+      + ".grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}"
+      + ".grid-card{background:#fff;border-radius:12px;border:1px solid #e0e0e0;padding:20px 16px;"
+      + "text-align:center;text-decoration:none;color:#1a1a1a;display:flex;flex-direction:column;"
+      + "align-items:center;gap:8px;transition:all .15s;min-height:100px;}"
+      + ".grid-card:active{background:#f8f9fa;transform:scale(0.97);}"
+      + ".grid-card svg{width:28px;height:28px;color:#1a73e8;}"
+      + ".grid-card .label{font-size:13px;font-weight:500;}"
+      + ".grid-card .desc{font-size:11px;color:#888;}"
+      + ".upload-zone{border:2px dashed #d0d0d0;border-radius:12px;padding:24px;text-align:center;"
+      + "cursor:pointer;transition:all .15s;margin-top:12px;}"
+      + ".upload-zone:active{border-color:#1a73e8;background:#f8f9fa;}"
+      + ".status-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}"
+      + ".stat{flex:1;min-width:120px;background:#fff;border-radius:10px;border:1px solid #e0e0e0;"
+      + "padding:12px;text-align:center;}"
+      + ".stat .val{font-size:20px;font-weight:700;color:#1a73e8;}"
+      + ".stat .lbl{font-size:11px;color:#888;margin-top:2px;}"
+      + "table{width:100%;border-collapse:collapse;}"
+      + "th,td{padding:10px 12px;text-align:left;font-size:13px;}"
+      + "th{background:#fafafa;font-weight:600;font-size:11px;color:#888;text-transform:uppercase;"
+      + "letter-spacing:0.5px;border-bottom:1px solid #e0e0e0;}"
+      + "td{border-bottom:1px solid #f0f0f0;}"
+      + "tr:active{background:#f8f9fa;}"
+      + "input[type=text],input[type=number]{width:100%;padding:10px 12px;border:1px solid #e0e0e0;"
+      + "border-radius:8px;font-size:14px;min-height:44px;background:#fff;}"
+      + "input:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,0.15);}"
+      + ".toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:#1a1a1a;"
+      + "color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:200;"
+      + "opacity:0;transition:opacity .2s;pointer-events:none;}"
+      + ".toast.show{opacity:1;}"
+      + ".icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}"
+      + ".icon-item{background:#fff;border-radius:12px;border:2px solid #e0e0e0;padding:16px 8px;"
+      + "text-align:center;cursor:pointer;transition:all .15s;}"
+      + ".icon-item:active{border-color:#1a73e8;transform:scale(0.97);}"
+      + ".icon-item.selected{border-color:#1a73e8;background:#e8f0fe;}"
+      + ".icon-item img{width:48px;height:48px;border-radius:8px;margin-bottom:6px;}"
+      + ".icon-item .name{font-size:11px;color:#666;word-break:break-all;line-height:1.2;}"
+      + "@media(max-width:380px){.grid{grid-template-columns:1fr;}.icon-grid{grid-template-columns:repeat(2,1fr);}}";
+
+  private String navBar(String active) {
+    String fm = "/fm".equals(active) ? "active" : "";
+    String apk = "/apk".equals(active) ? "active" : "";
+    String icons = "/icons".equals(active) ? "active" : "";
+    String settings = "/settings".equals(active) ? "active" : "";
+    return "<nav class=\"nav\">"
+        + "<a href=\"/\" class=\"" + ("".equals(active) ? "active" : "") + "\">"
+        + "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z\"/></svg>"
+        + "Home</a>"
+        + "<a href=\"/fm\" class=\"" + fm + "\">"
+        + "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z\"/></svg>"
+        + "Files</a>"
+        + "<a href=\"/apk\" class=\"" + apk + "\">"
+        + "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z\"/></svg>"
+        + "Apps</a>"
+        + "<a href=\"/icons\" class=\"" + icons + "\">"
+        + "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\"/></svg>"
+        + "Icons</a>"
+        + "<a href=\"/settings\" class=\"" + settings + "\">"
+        + "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>"
+        + "Settings</a>"
+        + "</nav>";
+  }
+
+  private String toastHtml() {
+    return "<div class=\"toast\" id=\"toast\"></div>"
+        + "<script>function showToast(m){var t=document.getElementById('toast');t.textContent=m;"
+        + "t.classList.add('show');setTimeout(function(){t.classList.remove('show')},3000);}</script>";
+  }
+
   // ===== GET =====
 
   private void handleGet(String path, String fullUri, File rootDir, OutputStream os) throws IOException {
+    if ("/".equals(path)) {
+      sendHomePage(rootDir, os);
+      return;
+    }
     if ("/fm".equals(path)) {
       String dirPath = extractQueryParam(fullUri, "path");
       sendFileManagerPage(dirPath, rootDir, os);
@@ -204,6 +322,10 @@ public class HttpService extends Service {
       sendSystemSettingsPage(os);
       return;
     }
+    if ("/icons".equals(path)) {
+      sendIconManagerPage(os);
+      return;
+    }
 
     File file = new File(rootDir, path);
 
@@ -213,94 +335,60 @@ public class HttpService extends Service {
     }
 
     if (file.isDirectory()) {
-      sendDirectoryListing(path, file, os);
+      String redirectPath = file.getAbsolutePath();
+      String resp = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+          + "<meta http-equiv=\"refresh\" content=\"0;url=/fm?path=" + escapeHtml(redirectPath) + "\">"
+          + "</head><body></body></html>";
+      sendResponse(os, 302, "Redirect", "text/html; charset=UTF-8", resp);
     } else {
       sendFile(file, os);
     }
   }
 
-  private void sendDirectoryListing(String path, File dir, OutputStream os) throws IOException {
-    File[] files = dir.listFiles();
+  // ===== Home Page =====
+
+  private void sendHomePage(File rootDir, OutputStream os) throws IOException {
+    File[] rootFiles = rootDir.listFiles();
+    int fileCount = 0;
+    long totalSize = 0;
+    if (rootFiles != null) {
+      for (File f : rootFiles) {
+        if (!f.getName().startsWith(".")) {
+          fileCount++;
+          if (f.isFile()) totalSize += f.length();
+        }
+      }
+    }
     StringBuilder sb = new StringBuilder();
     sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
     sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-    sb.append("<title>E-Ink Launcher - ");
-    sb.append(escapeHtml(path));
-    sb.append("</title><style>");
-    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
-    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:16px;}");
-    sb.append("h1{font-size:18px;margin-bottom:12px;word-break:break-all;}");
-    sb.append(".item{display:flex;align-items:center;padding:10px 12px;margin:4px 0;");
-    sb.append("background:#fff;border-radius:6px;text-decoration:none;color:#333;");
-    sb.append("border:1px solid #e0e0e0;}");
-    sb.append(".item:hover{background:#e8f0fe;border-color:#4285f4;}");
-    sb.append(".item.dir{font-weight:600;}");
-    sb.append(".name{flex:1;word-break:break-all;font-size:14px;}");
-    sb.append(".size{color:#888;font-size:12px;margin-left:8px;white-space:nowrap;}");
-    sb.append(".del{color:#d32f2f;margin-left:8px;font-size:12px;text-decoration:none;");
-    sb.append("padding:4px 8px;border-radius:4px;border:1px solid #d32f2f;background:#fff;}");
-    sb.append(".del:hover{background:#d32f2f;color:#fff;}");
-    sb.append("form{margin-top:16px;padding:16px;background:#fff;border-radius:6px;");
-    sb.append("border:1px solid #e0e0e0;}");
-    sb.append("input[type=file]{margin-right:8px;}");
-    sb.append("button{padding:6px 16px;background:#4285f4;color:#fff;border:none;");
-    sb.append("border-radius:4px;cursor:pointer;font-size:14px;}");
-    sb.append("button:hover{background:#3367d6;}");
-    sb.append("</style></head><body>");
-    sb.append("<h1>");
-    sb.append(escapeHtml(path.equals("/") ? "Root" : path));
-    sb.append("</h1>");
-
-    if (!"/".equals(path)) {
-      String parent = path.endsWith("/") ? new File(path).getParent() : new File(path).getParent();
-      if (parent == null) parent = "/";
-      sb.append("<a class=\"item dir\" href=\"");
-      sb.append(escapeHtml(parent.equals("/") ? "/" : parent + "/"));
-      sb.append("\"><span class=\"name\">.. (Parent)</span></a>");
-    }
-
-    if (files != null) {
-      java.util.Arrays.sort(files, (a, b) -> {
-        if (a.isDirectory() != b.isDirectory()) {
-          return a.isDirectory() ? -1 : 1;
-        }
-        return a.getName().compareToIgnoreCase(b.getName());
-      });
-
-      for (File f : files) {
-        if (f.getName().startsWith(".")) continue;
-        sb.append("<a class=\"item");
-        if (f.isDirectory()) sb.append(" dir");
-        String href = path.endsWith("/") ? path + f.getName() : path + "/" + f.getName();
-        if (f.isDirectory()) href += "/";
-        sb.append("\" href=\"");
-        sb.append(escapeHtml(href));
-        sb.append("\"><span class=\"name\">");
-        sb.append(escapeHtml(f.getName()));
-        sb.append("</span>");
-        if (f.isFile()) {
-          sb.append("<span class=\"size\">");
-          sb.append(formatSize(f.length()));
-          sb.append("</span>");
-        }
-        sb.append("<span class=\"del\" onclick=\"event.preventDefault();if(confirm('Delete?");
-        sb.append("'))fetch('");
-        sb.append(escapeHtml(href));
-        sb.append("',{method:'DELETE'}).then(()=>location.reload());\">X</span>");
-        sb.append("</a>");
-      }
-    }
-
-    sb.append("<form method=\"POST\" enctype=\"multipart/form-data\" action=\"");
-    sb.append(escapeHtml(path.endsWith("/") ? path : path + "/"));
-    sb.append("\"><input type=\"file\" name=\"file\" multiple required>");
-    sb.append("<button type=\"submit\">Upload</button></form>");
+    sb.append("<title>E-Ink Manager</title><style>").append(CSS).append("</style></head><body>");
+    sb.append("<div class=\"topbar\"><h1>E-Ink Manager</h1></div>");
+    sb.append("<div class=\"content\">");
+    sb.append("<div class=\"status-bar\">");
+    sb.append("<div class=\"stat\"><div class=\"val\">").append(fileCount).append("</div><div class=\"lbl\">Files</div></div>");
+    sb.append("<div class=\"stat\"><div class=\"val\">").append(formatSize(totalSize)).append("</div><div class=\"lbl\">Total Size</div></div>");
+    sb.append("</div>");
+    sb.append("<div class=\"grid\">");
+    sb.append("<a href=\"/fm\" class=\"grid-card\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z\"/></svg>");
+    sb.append("<div class=\"label\">File Manager</div><div class=\"desc\">Browse & manage files</div></a>");
+    sb.append("<a href=\"/apk\" class=\"grid-card\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z\"/></svg>");
+    sb.append("<div class=\"label\">APK Manager</div><div class=\"desc\">Install apps</div></a>");
+    sb.append("<a href=\"/icons\" class=\"grid-card\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\"/></svg>");
+    sb.append("<div class=\"label\">Icon Manager</div><div class=\"desc\">Customize icons</div></a>");
+    sb.append("<a href=\"/settings\" class=\"grid-card\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>");
+    sb.append("<div class=\"label\">System Settings</div><div class=\"desc\">Device settings</div></a>");
+    sb.append("</div></div>");
+    sb.append(navBar("/"));
     sb.append("</body></html>");
-
     sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
 
-  // ===== Web UI: File Manager =====
+  // ===== File Manager =====
 
   private void sendFileManagerPage(String dirPath, File rootDir, OutputStream os) throws IOException {
     File dir;
@@ -317,64 +405,52 @@ public class HttpService extends Service {
       return a.getName().compareToIgnoreCase(b.getName());
     });
     StringBuilder sb = new StringBuilder();
-    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-    sb.append("<title>File Manager</title><style>");
-    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
-    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
-    sb.append("h1{font-size:18px;margin-bottom:8px;}");
-    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
-    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
-    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
-    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
-    sb.append(".path{font-size:13px;color:#666;margin-bottom:10px;word-break:break-all;}");
-    sb.append("table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;}");
-    sb.append("th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;font-size:14px;}");
-    sb.append("th{background:#fafafa;font-weight:600;font-size:12px;color:#888;text-transform:uppercase;}");
-    sb.append("tr:hover{background:#f8f9fa;}");
-    sb.append(".name{color:#333;text-decoration:none;}");
-    sb.append(".name.dir{font-weight:600;color:#1a73e8;}");
-    sb.append(".size{color:#888;font-size:12px;white-space:nowrap;}");
-    sb.append(".actions{white-space:nowrap;}");
-    sb.append(".btn{padding:4px 10px;border-radius:4px;border:1px solid #ccc;background:#fff;text-decoration:none;font-size:12px;margin-left:4px;cursor:pointer;}");
-    sb.append(".btn.del{color:#d32f2f;border-color:#d32f2f;}.btn.del:hover{background:#d32f2f;color:#fff;}");
-    sb.append(".btn.dl{color:#188038;border-color:#188038;}.btn.dl:hover{background:#188038;color:#fff;}");
-    sb.append(".upload{margin-top:12px;padding:12px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;}");
-    sb.append(".empty{text-align:center;padding:40px;color:#999;font-size:14px;}");
-    sb.append("</style></head><body>");
-    sb.append("<h1>\ud83d\udcc1 File Manager</h1>");
-    sb.append("<div class=\"nav\"><a href=\"/fm\" class=\"active\">Files</a><a href=\"/apk\">APK Manager</a><a href=\"/settings\">Settings</a></div>");
-    sb.append("<div class=\"path\">\ud83d\udcc2 ").append(escapeHtml(dir.getAbsolutePath())).append("</div>");
-    String parent = dir.getParent();
-    if (parent != null) {
-      sb.append("<table><tr><th>Name</th><th>Size</th><th>Actions</th></tr>");
-      sb.append("<tr><td colspan=\"3\"><a class=\"name dir\" href=\"/fm?path=").append(escapeHtml(parent)).append("\">\u2b06 .. (Parent)</a></td></tr>");
-    } else {
-      sb.append("<table><tr><th>Name</th><th>Size</th><th>Actions</th></tr>");
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
+    sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>Files - E-Ink Manager</title><style>").append(CSS).append("</style></head><body>");
+    sb.append("<div class=\"topbar\">");
+    if (dir.getParent() != null) {
+      sb.append("<a href=\"/fm?path=").append(escapeHtml(dir.getParent())).append("\" class=\"back\">");
+      sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"20\" height=\"20\"><path d=\"M15 19l-7-7 7-7\"/></svg></a>");
     }
+    sb.append("<h1>Files</h1></div>");
+    sb.append("<div class=\"content\">");
+    sb.append("<div class=\"card\"><div class=\"row\" style=\"font-size:12px;color:#888;\">");
+    sb.append(escapeHtml(dir.getAbsolutePath()));
+    sb.append("</div></div>");
+    sb.append("<div class=\"card\">");
     if (files.length == 0) {
-      sb.append("<tr><td colspan=\"3\" class=\"empty\">Empty directory</td></tr>");
+      sb.append("<div class=\"empty\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z\"/></svg><p>Empty directory</p></div>");
     } else {
       for (File f : files) {
-        sb.append("<tr>");
-        String icon = f.isDirectory() ? "\ud83d\udcc1" : "\ud83d\udcc4";
-        String href = "/fm?path=" + escapeHtml(f.getAbsolutePath());
-        sb.append("<td><a class=\"name").append(f.isDirectory() ? " dir" : "").append("\" href=\"").append(href).append("\">").append(icon).append(" ").append(escapeHtml(f.getName())).append("</a></td>");
-        sb.append("<td class=\"size\">"); if (f.isFile()) sb.append(formatSize(f.length())); sb.append("</td>");
-        sb.append("<td class=\"actions\">");
-        if (f.isFile()) sb.append("<a class=\"btn dl\" href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download>Download</a>");
-        sb.append("<a class=\"btn del\" href=\"#\" onclick=\"if(confirm('Delete?'))fetch('").append(escapeHtml(f.getAbsolutePath())).append("',{method:'DELETE'}).then(()=>location.reload());\">Delete</a>");
-        sb.append("</td></tr>");
+        if (f.getName().startsWith(".")) continue;
+        sb.append("<div class=\"row\">");
+        if (f.isDirectory()) {
+          sb.append("<svg class=\"row-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z\"/></svg>");
+          sb.append("<div class=\"row-text\"><a href=\"/fm?path=").append(escapeHtml(f.getAbsolutePath())).append("\" class=\"row-title\">").append(escapeHtml(f.getName())).append("</a></div>");
+        } else {
+          sb.append("<svg class=\"row-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z\"/></svg>");
+          sb.append("<div class=\"row-text\"><a href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download class=\"row-title\">").append(escapeHtml(f.getName())).append("</a>");
+          sb.append("<div class=\"row-sub\">").append(formatSize(f.length())).append("</div></div>");
+        }
+        sb.append("<div class=\"row-action\"><button class=\"btn btn-sm btn-danger\" onclick=\"if(confirm('Delete?'))fetch('").append(escapeHtml(f.getAbsolutePath())).append("',{method:'DELETE'}).then(function(){location.reload()})\">Delete</button></div>");
+        sb.append("</div>");
       }
     }
-    sb.append("</table>");
-    sb.append("<form class=\"upload\" method=\"POST\" enctype=\"multipart/form-data\" action=\"").append(escapeHtml(dir.getAbsolutePath())).append("\">");
-    sb.append("<input type=\"file\" name=\"file\" multiple style=\"margin-right:8px;\">");
-    sb.append("<button type=\"submit\" style=\"padding:6px 16px;background:#4285f4;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;\">Upload</button>");
-    sb.append("</form></body></html>");
+    sb.append("</div>");
+    sb.append("<form class=\"upload-zone\" method=\"POST\" enctype=\"multipart/form-data\" action=\"").append(escapeHtml(dir.getAbsolutePath())).append("\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"24\" height=\"24\" style=\"color:#1a73e8\"><path d=\"M12 5v14m-7-7h14\"/></svg>");
+    sb.append("<div style=\"font-size:13px;font-weight:500\">Tap to upload files</div>");
+    sb.append("<input type=\"file\" name=\"file\" multiple style=\"display:none\" onchange=\"this.form.submit()\">");
+    sb.append("</form></div>");
+    sb.append(navBar("/fm"));
+    sb.append(toastHtml());
+    sb.append("<script>document.querySelector('.upload-zone').addEventListener('click',function(e){if(e.target.tagName!=='INPUT')this.querySelector('input').click()});</script>");
+    sb.append("</body></html>");
     sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
 
-  // ===== Web UI: APK Manager =====
+  // ===== APK Manager =====
 
   private void sendApkManagerPage(File rootDir, OutputStream os) throws IOException {
     java.util.List<File> apkFiles = new java.util.ArrayList<>();
@@ -384,107 +460,137 @@ public class HttpService extends Service {
       if (!dir.exists() || !dir.isDirectory()) continue;
       File[] found = dir.listFiles();
       if (found == null) continue;
-      for (File f : found) { if (f.getName().toLowerCase().endsWith(".apk") && f.isFile()) apkFiles.add(f); }
+      for (File f : found) {
+        if (f.getName().toLowerCase().endsWith(".apk") && f.isFile()) apkFiles.add(f);
+      }
     }
     StringBuilder sb = new StringBuilder();
-    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-    sb.append("<title>APK Manager</title><style>");
-    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
-    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
-    sb.append("h1{font-size:18px;margin-bottom:8px;}");
-    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
-    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
-    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
-    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
-    sb.append("table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;}");
-    sb.append("th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;font-size:14px;}");
-    sb.append("th{background:#fafafa;font-weight:600;font-size:12px;color:#888;}");
-    sb.append("tr:hover{background:#f8f9fa;}");
-    sb.append(".btn{padding:6px 14px;border-radius:4px;border:1px solid #188038;background:#fff;color:#188038;text-decoration:none;font-size:13px;cursor:pointer;}");
-    sb.append(".btn:hover{background:#188038;color:#fff;}");
-    sb.append(".empty{text-align:center;padding:40px;color:#999;font-size:14px;}");
-    sb.append("</style></head><body>");
-    sb.append("<h1>\ud83d\udce6 APK Manager</h1>");
-    sb.append("<div class=\"nav\"><a href=\"/fm\">Files</a><a href=\"/apk\" class=\"active\">APK Manager</a><a href=\"/settings\">Settings</a></div>");
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
+    sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>Apps - E-Ink Manager</title><style>").append(CSS).append("</style></head><body>");
+    sb.append("<div class=\"topbar\"><h1>APK Manager</h1></div>");
+    sb.append("<div class=\"content\">");
     if (apkFiles.isEmpty()) {
-      sb.append("<div class=\"empty\">No APK files found in Download folders</div>");
+      sb.append("<div class=\"empty\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z\"/></svg>");
+      sb.append("<p>No APK files found in Download folders</p></div>");
     } else {
-      sb.append("<table><tr><th>File</th><th>Size</th><th>Location</th><th>Action</th></tr>");
+      sb.append("<div class=\"status-bar\"><div class=\"stat\"><div class=\"val\">").append(apkFiles.size()).append("</div><div class=\"lbl\">APK Files</div></div></div>");
+      sb.append("<div class=\"card\">");
       for (File f : apkFiles) {
-        sb.append("<tr><td>").append(escapeHtml(f.getName())).append("</td>");
-        sb.append("<td>").append(formatSize(f.length())).append("</td>");
-        sb.append("<td>").append(escapeHtml(f.getParent())).append("</td>");
-        sb.append("<td><a class=\"btn\" href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download>Install</a></td></tr>");
+        sb.append("<div class=\"row\">");
+        sb.append("<svg class=\"row-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z\"/></svg>");
+        sb.append("<div class=\"row-text\"><div class=\"row-title\">").append(escapeHtml(f.getName())).append("</div>");
+        sb.append("<div class=\"row-sub\">").append(formatSize(f.length())).append(" &middot; ").append(escapeHtml(f.getParent())).append("</div></div>");
+        sb.append("<div class=\"row-action\"><a href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download class=\"btn btn-sm btn-primary\">Install</a></div>");
+        sb.append("</div>");
       }
-      sb.append("</table>");
+      sb.append("</div>");
     }
+    sb.append("</div>");
+    sb.append(navBar("/apk"));
     sb.append("</body></html>");
     sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
 
-  // ===== Web UI: System Settings =====
+  // ===== Icon Manager =====
 
-  private void sendSystemSettingsPage(OutputStream os) throws IOException {
-    java.util.List<SettingEntry> settings = new java.util.ArrayList<>();
-    settings.add(new SettingEntry("WiFi", "Wi-Fi settings", Settings.ACTION_WIFI_SETTINGS));
-    settings.add(new SettingEntry("Display", "Brightness, screen timeout", Settings.ACTION_DISPLAY_SETTINGS));
-    settings.add(new SettingEntry("Sound", "Ringtone, volume", Settings.ACTION_SOUND_SETTINGS));
-    settings.add(new SettingEntry("Apps", "App management", Settings.ACTION_APPLICATION_DETAILS_SETTINGS));
-    settings.add(new SettingEntry("Developer", "Developer options", Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));
-    settings.add(new SettingEntry("Battery", "Battery saver", Settings.ACTION_BATTERY_SAVER_SETTINGS));
-    settings.add(new SettingEntry("Storage", "Internal storage", Settings.ACTION_INTERNAL_STORAGE_SETTINGS));
-    settings.add(new SettingEntry("Notifications", "Notification access", Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-    settings.add(new SettingEntry("Location", "Location services", Settings.ACTION_LOCATION_SOURCE_SETTINGS));
-    settings.add(new SettingEntry("Security", "Lock screen, encryption", Settings.ACTION_SECURITY_SETTINGS));
-    StringBuilder sb = new StringBuilder();
-    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-    sb.append("<title>System Settings</title><style>");
-    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
-    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
-    sb.append("h1{font-size:18px;margin-bottom:8px;}");
-    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
-    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
-    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
-    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
-    sb.append(".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}");
-    sb.append(".card{background:#fff;border-radius:8px;padding:16px;text-align:center;border:1px solid #e0e0e0;text-decoration:none;color:#333;cursor:pointer;}");
-    sb.append(".card:hover{border-color:#4285f4;background:#f8f9fa;}");
-    sb.append(".icon{font-size:32px;margin-bottom:8px;}");
-    sb.append(".title{font-weight:600;font-size:14px;}");
-    sb.append(".desc{font-size:11px;color:#888;margin-top:4px;}");
-    sb.append("</style></head><body>");
-    sb.append("<h1>\u2699\ufe0f System Settings</h1>");
-    sb.append("<div class=\"nav\"><a href=\"/fm\">Files</a><a href=\"/apk\">APK Manager</a><a href=\"/settings\" class=\"active\">Settings</a></div>");
-    sb.append("<div class=\"grid\">");
-    for (SettingEntry s : settings) {
-      sb.append("<a class=\"card\" href=\"").append(escapeHtml(s.action)).append("\">");
-      sb.append("<div class=\"icon\">").append(s.icon).append("</div>");
-      sb.append("<div class=\"title\">").append(escapeHtml(s.title)).append("</div>");
-      sb.append("<div class=\"desc\">").append(escapeHtml(s.desc)).append("</div>");
-      sb.append("</a>");
+  private void sendIconManagerPage(OutputStream os) throws IOException {
+    String customIconDir = getExternalCacheDir() != null ? getExternalCacheDir().getAbsolutePath() + "/custom_icons" : null;
+    java.util.Map<String, String> currentIcons = new java.util.LinkedHashMap<>();
+    currentIcons.put("lock", "Lock Screen");
+    currentIcons.put("wifi", "WiFi");
+    currentIcons.put("http", "HTTP Server");
+    java.util.List<String[]> availableIcons = new java.util.ArrayList<>();
+    String[] defaultIcons = {"lock", "wifi", "http", "settings", "folder", "file", "image", "music", "video"};
+    for (String icon : defaultIcons) {
+      availableIcons.add(new String[]{icon, icon});
     }
-    sb.append("</div></body></html>");
+    if (customIconDir != null) {
+      File dir = new File(customIconDir);
+      if (dir.exists() && dir.isDirectory()) {
+        File[] customFiles = dir.listFiles();
+        if (customFiles != null) {
+          for (File f : customFiles) {
+            String name = f.getName();
+            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".webp")) {
+              availableIcons.add(new String[]{name, "custom/" + name});
+            }
+          }
+        }
+      }
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
+    sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>Icons - E-Ink Manager</title><style>").append(CSS).append("</style></head><body>");
+    sb.append("<div class=\"topbar\"><h1>Icon Manager</h1></div>");
+    sb.append("<div class=\"content\">");
+    sb.append("<div class=\"card\"><div class=\"card-header\">Current Icons</div>");
+    for (java.util.Map.Entry<String, String> entry : currentIcons.entrySet()) {
+      sb.append("<div class=\"row\">");
+      sb.append("<svg class=\"row-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg>");
+      sb.append("<div class=\"row-text\"><div class=\"row-title\">").append(entry.getValue()).append("</div>");
+      sb.append("<div class=\"row-sub\">").append(entry.getKey()).append(".png</div></div>");
+      sb.append("<div class=\"row-action\"><button class=\"btn btn-sm\" onclick=\"showToast('Long press icon to replace')\">Change</button></div>");
+      sb.append("</div>");
+    }
+    sb.append("</div>");
+    sb.append("<div class=\"card\"><div class=\"card-header\">Available Icons</div>");
+    sb.append("<div class=\"icon-grid\">");
+    for (String[] icon : availableIcons) {
+      sb.append("<div class=\"icon-item\" onclick=\"showToast('Selected: ").append(escapeHtml(icon[0])).append("')\">");
+      sb.append("<div style=\"width:48px;height:48px;background:#f0f0f0;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;\">");
+      sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#666\" stroke-width=\"2\" width=\"24\" height=\"24\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg>");
+      sb.append("</div><div class=\"name\">").append(escapeHtml(icon[0])).append("</div></div>");
+    }
+    sb.append("</div></div>");
+    sb.append("<div class=\"upload-zone\" id=\"uploadZone\">");
+    sb.append("<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"24\" height=\"24\" style=\"color:#1a73e8\"><path d=\"M12 5v14m-7-7h14\"/></svg>");
+    sb.append("<div style=\"font-size:13px;font-weight:500\">Upload custom icon (PNG, 96x96)</div>");
+    sb.append("<input type=\"file\" id=\"iconUpload\" accept=\"image/*\" style=\"display:none\">");
+    sb.append("</div>");
+    sb.append("<p style=\"font-size:12px;color:#888;margin-top:8px;text-align:center;\">Icons are stored in the app's cache directory.<br>Recommended size: 96x96px, PNG format.</p>");
+    sb.append("</div>");
+    sb.append(navBar("/icons"));
+    sb.append(toastHtml());
+    sb.append("<script>document.getElementById('uploadZone').addEventListener('click',function(){document.getElementById('iconUpload').click()});</script>");
+    sb.append("</body></html>");
     sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
 
-  private static class SettingEntry {
-    String title; String desc; String action; String icon;
-    SettingEntry(String title, String desc, String action) {
-      this.title = title; this.desc = desc; this.action = action;
-      switch (title) {
-        case "WiFi": this.icon = "\ud83d\udcf1"; break;
-        case "Display": this.icon = "\u2600\ufe0f"; break;
-        case "Sound": this.icon = "\ud83d\udd0a"; break;
-        case "Apps": this.icon = "\ud83d\udcf1"; break;
-        case "Developer": this.icon = "\ud83d\udd27"; break;
-        case "Battery": this.icon = "\ud83d\udd0b"; break;
-        case "Storage": this.icon = "\ud83d\udcbe"; break;
-        case "Notifications": this.icon = "\ud83d\udd14"; break;
-        case "Location": this.icon = "\ud83d\udccd"; break;
-        case "Security": this.icon = "\ud83d\udd12"; break;
-        default: this.icon = "\u2699\ufe0f";
-      }
+  // ===== System Settings =====
+
+  private void sendSystemSettingsPage(OutputStream os) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
+    sb.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>Settings - E-Ink Manager</title><style>").append(CSS).append("</style></head><body>");
+    sb.append("<div class=\"topbar\"><h1>System Settings</h1></div>");
+    sb.append("<div class=\"content\">");
+    sb.append("<div class=\"card\">");
+    String[][] settings = {
+      {"WiFi", "android.settings.WIFI_SETTINGS", "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"},
+      {"Display", "android.settings.DISPLAY_SETTINGS", "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"},
+      {"Sound", "android.settings.SOUND_SETTINGS", "M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"},
+      {"Apps", "android.settings.APPLICATION_DETAILS_SETTINGS", "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"},
+      {"Developer", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS", "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"},
+      {"Battery", "android.settings.BATTERY_SAVER_SETTINGS", "M17 6h-2V4a2 2 0 00-2-2H9a2 2 0 00-2 2v2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2z"},
+      {"Storage", "android.settings.INTERNAL_STORAGE_SETTINGS", "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"},
+      {"Notifications", "android.settings.NOTIFICATION_LISTENER_SETTINGS", "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"},
+      {"Location", "android.settings.LOCATION_SOURCE_SETTINGS", "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"},
+      {"Security", "android.settings.SECURITY_SETTINGS", "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"}
+    };
+    for (String[] s : settings) {
+      sb.append("<a href=\"").append(s[1]).append("\" class=\"row\" style=\"text-decoration:none;color:inherit;\">");
+      sb.append("<svg class=\"row-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"").append(s[2]).append("\"/></svg>");
+      sb.append("<div class=\"row-text\"><div class=\"row-title\">").append(s[0]).append("</div></div>");
+      sb.append("<svg class=\"row-action\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"16\" height=\"16\"><path d=\"M9 5l7 7-7 7\"/></svg>");
+      sb.append("</a>");
     }
+    sb.append("</div></div>");
+    sb.append(navBar("/settings"));
+    sb.append("</body></html>");
+    sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
 
   // ===== POST (Upload) =====
