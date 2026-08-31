@@ -2,9 +2,17 @@ package io.github.reborn.einklauncher;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.AbsoluteSizeSpan;
+import android.text.style.ClickableSpan;
+import android.text.style.StyleSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class AboutDialog {
@@ -20,117 +28,139 @@ public class AboutDialog {
   }
 
   private View initLayout() {
+    int pad = Utils.dp2Px(context, 14);
+
+    ScrollView scrollView = new ScrollView(context);
     LinearLayout root = new LinearLayout(context);
-    int padding = Utils.dp2Px(context, 15);
-    root.setPadding(padding, padding, padding, padding);
     root.setOrientation(LinearLayout.VERTICAL);
+    root.setPadding(pad, pad, pad, pad);
     root.setBackgroundColor(0xffffffff);
 
-    // 标题
+    // App name
     TextView title = new TextView(context);
     title.setText(R.string.app_name);
-    title.setTextSize(30);
+    title.setTextSize(26);
+    title.setTypeface(null, android.graphics.Typeface.BOLD);
     title.setTextColor(0xff000000);
     root.addView(title);
 
-    // 版本号
+    // Version
     TextView version = new TextView(context);
     version.setText("v" + BuildConfig.VERSION_NAME);
-    version.setTextSize(16);
+    version.setTextSize(15);
     version.setTextColor(0xff666666);
     LinearLayout.LayoutParams versionLP = new LinearLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     versionLP.topMargin = Utils.dp2Px(context, 4);
+    versionLP.bottomMargin = Utils.dp2Px(context, 6);
     root.addView(version, versionLP);
 
     addDivider(root);
 
-    // 主要功能
-    TextView features = new TextView(context);
-    features.setText(R.string.about_features);
-    features.setTextSize(15);
-    features.setTextColor(0xff000000);
-    features.setLineSpacing(0, 1.3f);
-    LinearLayout.LayoutParams featuresLP = new LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    featuresLP.topMargin = Utils.dp2Px(context, 8);
-    featuresLP.bottomMargin = Utils.dp2Px(context, 8);
-    root.addView(features, featuresLP);
+    // Features
+    addSectionHeader(root, R.string.about_features, 15);
 
+    // Custom Icons
+    addSectionHeader(root, R.string.about_custom_icon_title, 16);
+    TextView customIconInfo = addText(root, R.string.about_custom_icon_info, 14, 0xff333333, 8);
     addDivider(root);
 
-    // 自定义图标说明
-    TextView customIconTitle = new TextView(context);
-    customIconTitle.setText(R.string.about_custom_icon_title);
-    customIconTitle.setTextSize(16);
-    customIconTitle.setTextColor(0xff000000);
-    customIconTitle.setPadding(0, Utils.dp2Px(context, 8), 0, 0);
-    root.addView(customIconTitle);
-
-    TextView customIconInfo = new TextView(context);
-    customIconInfo.setText(R.string.about_custom_icon_info);
-    customIconInfo.setTextSize(14);
-    customIconInfo.setTextColor(0xff333333);
-    customIconInfo.setLineSpacing(0, 1.3f);
-    LinearLayout.LayoutParams customIconLP = new LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    customIconLP.topMargin = Utils.dp2Px(context, 4);
-    customIconLP.bottomMargin = Utils.dp2Px(context, 8);
-    root.addView(customIconInfo, customIconLP);
-
+    TextView iconNames = addText(root, R.string.about_custom_icon_filenames, 13, 0xff555555, 8);
     addDivider(root);
 
-    // 自定义图标文件名列表
-    TextView iconNames = new TextView(context);
-    iconNames.setText(R.string.about_custom_icon_filenames);
-    iconNames.setTextSize(13);
-    iconNames.setTextColor(0xff555555);
-    iconNames.setLineSpacing(0, 1.3f);
-    LinearLayout.LayoutParams iconNamesLP = new LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    iconNamesLP.topMargin = Utils.dp2Px(context, 8);
-    iconNamesLP.bottomMargin = Utils.dp2Px(context, 8);
-    root.addView(iconNames, iconNamesLP);
-
+    TextView pathInfo = addText(root, R.string.about_icon_path, 13, 0xff555555, 8);
     addDivider(root);
 
-    // 目录说明
-    TextView pathInfo = new TextView(context);
-    pathInfo.setText(R.string.about_icon_path);
-    pathInfo.setTextSize(13);
-    pathInfo.setTextColor(0xff555555);
-    pathInfo.setPadding(0, Utils.dp2Px(context, 8), 0, 0);
-    root.addView(pathInfo);
-
-    addDivider(root);
-
-    // 开发者信息
-    TextView devTitle = new TextView(context);
-    devTitle.setText(R.string.about_developers);
-    devTitle.setTextSize(16);
-    devTitle.setTextColor(0xff000000);
-    devTitle.setPadding(0, Utils.dp2Px(context, 8), 0, 0);
-    root.addView(devTitle);
+    // Developers
+    addSectionHeader(root, R.string.about_developers, 16);
 
     TextView devInfo = new TextView(context);
     devInfo.setText(R.string.about_developer_info);
     devInfo.setTextSize(14);
     devInfo.setTextColor(0xff333333);
-    devInfo.setLineSpacing(0, 1.3f);
+    devInfo.setLineSpacing(0, 1.4f);
     LinearLayout.LayoutParams devInfoLP = new LinearLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     devInfoLP.topMargin = Utils.dp2Px(context, 4);
-    devInfoLP.bottomMargin = Utils.dp2Px(context, 8);
+    devInfoLP.bottomMargin = Utils.dp2Px(context, 4);
     root.addView(devInfo, devInfoLP);
 
-    return root;
+    // Clickable GitHub link
+    SpannableString githubLink = new SpannableString(
+        "https://github.com/ACG-Q/elinkLaun-Reborn");
+    githubLink.setSpan(new ClickableSpan() {
+      @Override
+      public void onClick(android.view.View widget) {
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://github.com/ACG-Q/elinkLaun-Reborn"));
+        context.startActivity(intent);
+      }
+    }, 0, githubLink.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    githubLink.setSpan(new AbsoluteSizeSpan(14, true), 0, githubLink.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    devInfo.append("\n");
+    devInfo.append(githubLink);
+    devInfo.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+    devInfo.setHighlightColor(0xFF4285F4);
+
+    addDivider(root);
+
+    // Icons credit
+    TextView iconsCredit = new TextView(context);
+    iconsCredit.setText("Icons: icons/ directory (e-ink style)");
+    iconsCredit.setTextSize(12);
+    iconsCredit.setTextColor(0xff999999);
+    LinearLayout.LayoutParams creditLP = new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    creditLP.topMargin = Utils.dp2Px(context, 4);
+    creditLP.bottomMargin = Utils.dp2Px(context, 4);
+    root.addView(iconsCredit, creditLP);
+
+    scrollView.addView(root);
+    return scrollView;
+  }
+
+  private void addSectionHeader(LinearLayout parent, int textRes, int textSizeSp) {
+    TextView header = new TextView(context);
+    header.setText(textRes);
+    header.setTextSize(textSizeSp);
+    header.setTypeface(null, android.graphics.Typeface.BOLD);
+    header.setTextColor(0xff000000);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    lp.topMargin = Utils.dp2Px(context, 6);
+    lp.bottomMargin = Utils.dp2Px(context, 4);
+    parent.addView(header, lp);
+  }
+
+  private TextView addText(int textRes, int textSizeSp, int color, int marginVerticalDp) {
+    TextView tv = new TextView(context);
+    tv.setText(textRes);
+    tv.setTextSize(textSizeSp);
+    tv.setTextColor(color);
+    tv.setLineSpacing(0, 1.3f);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    lp.topMargin = Utils.dp2Px(context, 2);
+    lp.bottomMargin = Utils.dp2Px(context, marginVerticalDp);
+    tv.setLayoutParams(lp);
+    return tv;
+  }
+
+  private TextView addText(LinearLayout parent, int textRes, int textSizeSp, int color, int marginVerticalDp) {
+    TextView tv = addText(textRes, textSizeSp, color, marginVerticalDp);
+    parent.addView(tv);
+    return tv;
   }
 
   private void addDivider(LinearLayout parent) {
     View line = new View(context);
-    line.setBackgroundColor(0xff000000);
-    parent.addView(line, new ViewGroup.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, Utils.dp2Px(context, 1)));
+    line.setBackgroundColor(0xffcccccc);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, Utils.dp2Px(context, 1));
+    lp.topMargin = Utils.dp2Px(context, 2);
+    lp.bottomMargin = Utils.dp2Px(context, 2);
+    line.setLayoutParams(lp);
+    parent.addView(line);
   }
 
   public void show() {

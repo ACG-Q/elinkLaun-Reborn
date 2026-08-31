@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.AbsoluteSizeSpan;
+import android.text.style.ClickableSpan;
 import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
@@ -53,6 +54,8 @@ public class CrashDetailPage extends Activity {
     tvContent.setTextSize(13);
     tvContent.setTypeface(Typeface.MONOSPACE);
     tvContent.setLineSpacing(1.2f, 1.2f);
+    tvContent.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+    tvContent.setHighlightColor(Color.BLUE);
 
     scrollView.addView(tvContent);
 
@@ -107,20 +110,29 @@ public class CrashDetailPage extends Activity {
 
   private void fillErrorContent() {
     tvContent.setText("");
-    StringBuilder sb = new StringBuilder();
-
     String title = "Oh! It's Crashed.";
     SpannableString titleSpan = new SpannableString(title);
     titleSpan.setSpan(new AbsoluteSizeSpan(22, true), 0, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     titleSpan.setSpan(new StyleSpan(Typeface.BOLD), 0, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     tvContent.append(titleSpan);
-    tvContent.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    tvContent.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-    sb.append("Please screenshot and report the issue.\n");
-    sb.append("telegram : https://t.me/ElnkLauncher\n");
-    sb.append("github   : https://github.com/Modificator/E-Ink-Launcher\n");
-    sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-    tvContent.append(sb.toString());
+    tvContent.append("Please screenshot and report the issue.\n");
+    tvContent.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+    // Clickable GitHub link
+    SpannableString githubLink = new SpannableString(
+        "https://github.com/ACG-Q/elinkLaun-Reborn");
+    githubLink.setSpan(new ClickableSpan() {
+      @Override
+      public void onClick(android.view.View widget) {
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+            android.net.Uri.parse("https://github.com/ACG-Q/elinkLaun-Reborn"));
+        startActivity(intent);
+      }
+    }, 0, githubLink.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    tvContent.append(githubLink);
+    tvContent.append("\n\n");
 
     if (getIntent().hasExtra("crashFile")) {
       String fileName = getIntent().getStringExtra("crashFile");
@@ -131,14 +143,22 @@ public class CrashDetailPage extends Activity {
         reader.read(readData);
         String crashLog = new String(readData);
         tvContent.append(crashLog);
-        fullErrorText = title + "\n" + sb.toString() + crashLog;
+        fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
+            + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n"
+            + crashLog;
         reader.close();
       } catch (Throwable e) {
         tvContent.append("Failed to read crash file: " + e.getMessage());
-        fullErrorText = title + "\n" + sb.toString() + "Failed to read crash file: " + e.getMessage();
+        fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
+            + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n"
+            + "Failed to read crash file: " + e.getMessage();
       }
     } else {
-      fullErrorText = title + "\n" + sb.toString();
+      fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
+          + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+          + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n";
     }
   }
 

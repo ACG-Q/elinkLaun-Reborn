@@ -66,7 +66,7 @@
     <string name="about_custom_icon_filenames">自定义图标文件名：\n一键锁屏：E-ink_Launcher.Lock.png\nWiFi 开启：E-ink_Launcher.WifiOn.png\nWiFi 关闭：E-ink_Launcher.WifiOff.png</string>
     <string name="about_icon_path">目录：Documents/E-Ink Launcher/icon/</string>
     <string name="about_developers">开发者</string>
-    <string name="about_developer_info">原开发者：Modificator (yunshangcn@gmail.com)\n现开发者：六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
+    <string name="about_developer_info">原开发者：Modificator (yunshangcn@gmail.com)\n现开发者：六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub：https://github.com/ACG-Q/elinkLaun-Reborn</string>
     <string name="path">路径</string>
     <string name="default_path_setting">设置默认路径</string>
     <string name="dialog_confim">确认</string>

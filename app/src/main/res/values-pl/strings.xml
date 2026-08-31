@@ -68,7 +68,7 @@
     <string name="about_custom_icon_filenames">Nazwy plików ikon：\nBlokada ekranu：E-ink_Launcher.Lock.png\nWiFi wł.：E-ink_Launcher.WifiOn.png\nWiFi wył.：E-ink_Launcher.WifiOff.png</string>
     <string name="about_icon_path">Katalog：Documents/E-Ink Launcher/icon/</string>
     <string name="about_developers">Deweloperzy</string>
-    <string name="about_developer_info">Oryginalny：Modificator (yunshangcn@gmail.com)\nAktualny：六记 &amp; AI (MiMo V2.5 &amp; Opencode)</string>
+    <string name="about_developer_info">Oryginalny：Modificator (yunshangcn@gmail.com)\nAktualny：六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub：https://github.com/ACG-Q/elinkLaun-Reborn</string>
     <string name="path">Ścieżka</string>
     <string name="default_path_setting">Domyślna ścieżka</string>
     <string name="dialog_confim">Potwierdź</string>
