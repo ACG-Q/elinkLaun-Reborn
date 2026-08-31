@@ -14,7 +14,13 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.content.ContentResolver;
+import android.content.IntentFilter;
 import android.content.res.AssetManager;
+import android.media.AudioManager;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.StatFs;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -200,6 +206,15 @@ public class HttpService extends Service {
     if ("/api/files".equals(path)) { sendJsonFiles(extractQueryParam(fullUri, "path"), rootDir, os); return; }
     if ("/api/apks".equals(path)) { sendJsonApks(rootDir, os); return; }
     if ("/api/icons".equals(path)) { sendJsonIcons(os); return; }
+    if ("/api/device".equals(path)) { sendJsonDevice(os); return; }
+    if ("/api/battery".equals(path)) { sendJsonBattery(os); return; }
+    if ("/api/storage".equals(path)) { sendJsonStorage(rootDir, os); return; }
+    if ("/api/wifi-status".equals(path)) { sendJsonWifiStatus(os); return; }
+    if ("/api/volume".equals(path)) { sendJsonVolume(os); return; }
+    if ("/api/brightness".equals(path)) { sendJsonBrightness(os); return; }
+    if ("/api/rotation".equals(path)) { sendJsonRotation(os); return; }
+    if ("/api/settings-links".equals(path)) { sendJsonSettingsLinks(os); return; }
+    if (path.startsWith("/custom_icons/")) { sendCustomIconFile(path, os); return; }
 
     if ("/".equals(path) || "/index.html".equals(path)) { sendAssetFile("index.html", os); return; }
     if (path.startsWith("/css/") || path.startsWith("/js/")) { sendAssetFile(path.substring(1), os); return; }
@@ -334,16 +349,20 @@ public class HttpService extends Service {
 
   private void sendJsonIcons(OutputStream os) throws IOException {
     try {
+      SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
       JSONObject json = new JSONObject();
       JSONObject current = new JSONObject();
-      current.put("lock", new JSONObject().put("label", "Lock Screen"));
-      current.put("wifi", new JSONObject().put("label", "WiFi"));
-      current.put("http", new JSONObject().put("label", "HTTP Server"));
+      String lockIcon = prefs.getString("icon_lock", "lock");
+      String wifiIcon = prefs.getString("icon_wifi", "wifi");
+      String httpIcon = prefs.getString("icon_http", "phone");
+      current.put("lock", iconInfo("lock", lockIcon));
+      current.put("wifi", iconInfo("wifi", wifiIcon));
+      current.put("http", iconInfo("http", httpIcon));
       json.put("currentIcons", current);
       JSONArray arr = new JSONArray();
-      String[] defaults = {"lock", "wifi", "http", "settings", "folder", "file", "image", "music", "video"};
+      String[] defaults = {"lock", "wifi", "http", "settings", "folder", "file", "image", "music", "video", "phone"};
       for (String name : defaults) {
-        arr.put(new JSONObject().put("name", name).put("type", "default"));
+        arr.put(new JSONObject().put("name", name + ".png").put("type", "default"));
       }
       File iconDir = new File(getExternalCacheDir(), "custom_icons");
       if (iconDir.exists() && iconDir.isDirectory()) {
@@ -359,6 +378,319 @@ public class HttpService extends Service {
       }
       json.put("availableIcons", arr);
       sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private JSONObject iconInfo(String key, String iconName) throws JSONException {
+    JSONObject info = new JSONObject();
+    info.put("label", key.substring(0, 1).toUpperCase() + key.substring(1));
+    info.put("icon", iconName);
+    if (iconName.endsWith(".png") || iconName.endsWith(".jpg") || iconName.endsWith(".webp")) {
+      info.put("url", "/custom_icons/" + iconName);
+    }
+    return info;
+  }
+
+  private void sendJsonDevice(OutputStream os) throws IOException {
+    try {
+      JSONObject json = new JSONObject();
+      json.put("model", Build.MODEL);
+      json.put("manufacturer", Build.MANUFACTURER);
+      json.put("brand", Build.BRAND);
+      json.put("device", Build.DEVICE);
+      json.put("board", Build.BOARD);
+      json.put("hardware", Build.HARDWARE);
+      json.put("release", Build.VERSION.RELEASE);
+      json.put("sdkInt", Build.VERSION.SDK_INT);
+      json.put("incremental", Build.VERSION.INCREMENTAL);
+      json.put("host", Build.HOST);
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private void sendJsonBattery(OutputStream os) throws IOException {
+    try {
+      IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+      Intent batteryStatus = registerReceiver(null, filter);
+      JSONObject json = new JSONObject();
+      if (batteryStatus != null) {
+        int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        int pct = (level * 100) / scale;
+        int status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        int health = batteryStatus.getIntExtra(BatteryManager.EXTRA_HEALTH, -1);
+        int temp = batteryStatus.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0);
+        int voltage = batteryStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
+        String tech = batteryStatus.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY);
+        json.put("level", pct);
+        json.put("status", status);
+        json.put("statusText", batteryStatusText(status));
+        json.put("health", health);
+        json.put("healthText", batteryHealthText(health));
+        json.put("temperature", String.format("%.1f°C", temp / 10.0));
+        json.put("voltage", String.format("%.2fV", voltage / 1000.0));
+        json.put("technology", tech != null ? tech : "Unknown");
+      }
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private String batteryStatusText(int status) {
+    switch (status) {
+      case BatteryManager.BATTERY_STATUS_CHARGING: return "Charging";
+      case BatteryManager.BATTERY_STATUS_DISCHARGING: return "Discharging";
+      case BatteryManager.BATTERY_STATUS_FULL: return "Full";
+      case BatteryManager.BATTERY_STATUS_NOT_CHARGING: return "Not Charging";
+      default: return "Unknown";
+    }
+  }
+
+  private String batteryHealthText(int health) {
+    switch (health) {
+      case BatteryManager.BATTERY_HEALTH_GOOD: return "Good";
+      case BatteryManager.BATTERY_HEALTH_OVERHEAT: return "Overheat";
+      case BatteryManager.BATTERY_HEALTH_DEAD: return "Dead";
+      case BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE: return "Over Voltage";
+      case BatteryManager.BATTERY_HEALTH_COLD: return "Cold";
+      default: return "Unknown";
+    }
+  }
+
+  private void sendJsonStorage(File rootDir, OutputStream os) throws IOException {
+    try {
+      StatFs stat = new StatFs(rootDir.getAbsolutePath());
+      long total = stat.getTotalBytes();
+      long available = stat.getAvailableBytes();
+      long used = total - available;
+      JSONObject json = new JSONObject();
+      json.put("total", total);
+      json.put("totalHuman", formatSize(total));
+      json.put("used", used);
+      json.put("usedHuman", formatSize(used));
+      json.put("available", available);
+      json.put("availableHuman", formatSize(available));
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private void sendJsonWifiStatus(OutputStream os) throws IOException {
+    try {
+      WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+      JSONObject json = new JSONObject();
+      if (wm != null) {
+        int state = wm.getWifiState();
+        json.put("state", state);
+        json.put("stateText", wifiStateText(state));
+        json.put("enabled", wm.isWifiEnabled());
+        if (wm.isWifiEnabled()) {
+          try {
+            android.net.wifi.WifiInfo info = wm.getConnectionInfo();
+            if (info != null) {
+              json.put("ssid", info.getSSID());
+              json.put("bssid", info.getBSSID());
+              json.put("rssi", info.getRssi());
+              json.put("linkSpeed", info.getLinkSpeed());
+              json.put("networkId", info.getNetworkId());
+            }
+          } catch (Exception ignored) {}
+        }
+      }
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private String wifiStateText(int state) {
+    switch (state) {
+      case WifiManager.WIFI_STATE_DISABLED: return "Disabled";
+      case WifiManager.WIFI_STATE_DISABLING: return "Disabling";
+      case WifiManager.WIFI_STATE_ENABLED: return "Enabled";
+      case WifiManager.WIFI_STATE_ENABLING: return "Enabling";
+      case WifiManager.WIFI_STATE_UNKNOWN: return "Unknown";
+      default: return "Unknown";
+    }
+  }
+
+  private void sendJsonVolume(OutputStream os) throws IOException {
+    try {
+      AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+      JSONObject json = new JSONObject();
+      if (am != null) {
+        putVolumeStream(json, "music", am, AudioManager.STREAM_MUSIC);
+        putVolumeStream(json, "ring", am, AudioManager.STREAM_RING);
+        putVolumeStream(json, "notification", am, AudioManager.STREAM_NOTIFICATION);
+        putVolumeStream(json, "alarm", am, AudioManager.STREAM_ALARM);
+      }
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private void putVolumeStream(JSONObject json, String key, AudioManager am, int stream) throws JSONException {
+    JSONObject s = new JSONObject();
+    s.put("current", am.getStreamVolume(stream));
+    s.put("max", am.getStreamMaxVolume(stream));
+    s.put("min", am.getStreamMinVolume(stream));
+    json.put(key, s);
+  }
+
+  private void sendJsonBrightness(OutputStream os) throws IOException {
+    try {
+      int brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+      JSONObject json = new JSONObject();
+      json.put("value", brightness);
+      sendJsonResponse(os, json.toString());
+    } catch (Exception e) {
+      try {
+        JSONObject json = new JSONObject();
+        json.put("value", 0);
+        json.put("error", "Cannot read brightness");
+        sendJsonResponse(os, json.toString());
+      } catch (JSONException ignored) {}
+    }
+  }
+
+  private void sendJsonRotation(OutputStream os) throws IOException {
+    try {
+      int rotation = Settings.System.getInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0);
+      JSONObject json = new JSONObject();
+      json.put("enabled", rotation == 1);
+      sendJsonResponse(os, json.toString());
+    } catch (Exception e) {
+      try {
+        JSONObject json = new JSONObject();
+        json.put("enabled", false);
+        sendJsonResponse(os, json.toString());
+      } catch (JSONException ignored) {}
+    }
+  }
+
+  private void sendJsonSettingsLinks(OutputStream os) throws IOException {
+    try {
+      JSONObject json = new JSONObject();
+      JSONArray arr = new JSONArray();
+      String[][] links = {
+        {"WiFi", "android.settings.WIFI_SETTINGS"},
+        {"Bluetooth", "android.settings.BLUETOOTH_SETTINGS"},
+        {"Display", "android.settings.DISPLAY_SETTINGS"},
+        {"Sound", "android.settings.SOUND_SETTINGS"},
+        {"Apps", "android.settings.APPLICATION_SETTINGS"},
+        {"Developer", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS"},
+        {"Battery", "android.settings.BATTERY_SAVER_SETTINGS"},
+        {"Storage", "android.settings.INTERNAL_STORAGE_SETTINGS"},
+        {"Notifications", "android.settings.NOTIFICATION_LISTENER_SETTINGS"},
+        {"Location", "android.settings.LOCATION_SOURCE_SETTINGS"},
+        {"Security", "android.settings.SECURITY_SETTINGS"},
+        {"About", "android.settings.DEVICE_INFO_SETTINGS"}
+      };
+      for (String[] link : links) {
+        JSONObject item = new JSONObject();
+        item.put("name", link[0]);
+        item.put("action", link[1]);
+        arr.put(item);
+      }
+      json.put("links", arr);
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
+  private void sendCustomIconFile(String path, OutputStream os) throws IOException {
+    String fileName = path.substring("/custom_icons/".length());
+    if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+      sendResponse(os, 403, "Forbidden", "text/plain", "403 Forbidden");
+      return;
+    }
+    File iconFile = new File(getExternalCacheDir(), "custom_icons/" + fileName);
+    if (!iconFile.exists()) {
+      sendResponse(os, 404, "Not Found", "text/plain", "404 Not Found");
+      return;
+    }
+    String mime = "image/png";
+    if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) mime = "image/jpeg";
+    else if (fileName.endsWith(".webp")) mime = "image/webp";
+    byte[] header = ("HTTP/1.1 200 OK\r\nContent-Type: " + mime + "\r\n"
+        + "Content-Length: " + iconFile.length() + "\r\n"
+        + "Cache-Control: max-age=86400\r\nConnection: close\r\n\r\n").getBytes("UTF-8");
+    os.write(header);
+    FileInputStream fis = new FileInputStream(iconFile);
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = fis.read(buf)) != -1) os.write(buf, 0, n);
+    fis.close();
+  }
+
+  private void handleIconUpload(String path, File rootDir, InputStream is,
+      String contentLengthStr, String contentType, OutputStream os) throws IOException {
+    try {
+      if (contentType == null || !contentType.contains("multipart/form-data")) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Expected multipart/form-data").toString());
+        return;
+      }
+      int contentLength = 0;
+      if (contentLengthStr != null) {
+        try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
+      }
+      if (contentLength <= 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing Content-Length").toString());
+        return;
+      }
+      String boundary = extractBoundary(contentType);
+      if (boundary == null) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
+        return;
+      }
+      byte[] allBytes = readFully(is, contentLength);
+      String delimiter = "--" + boundary;
+      int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
+      if (pos < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No boundary found").toString());
+        return;
+      }
+      pos += delimiter.length();
+      if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') pos += 2;
+      else if (pos + 1 <= allBytes.length && allBytes[pos] == '\n') pos += 1;
+      int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
+      if (headerEnd < 0) headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
+      if (headerEnd < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No header end").toString());
+        return;
+      }
+      String partHeader;
+      if (allBytes[headerEnd] == '\r') { partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8"); headerEnd += 4; }
+      else { partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8"); headerEnd += 2; }
+      String fileName = extractFileName(partHeader);
+      if (fileName == null) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No filename").toString());
+        return;
+      }
+      fileName = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+      int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), headerEnd);
+      if (dataEnd < 0) dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), headerEnd);
+      if (dataEnd < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No data end").toString());
+        return;
+      }
+      byte[] fileData = new byte[dataEnd - headerEnd];
+      System.arraycopy(allBytes, headerEnd, fileData, 0, fileData.length);
+      File iconDir = new File(getExternalCacheDir(), "custom_icons");
+      if (!iconDir.exists()) iconDir.mkdirs();
+      File outFile = new File(iconDir, fileName);
+      FileOutputStream fos = new FileOutputStream(outFile);
+      fos.write(fileData);
+      fos.close();
+      sendJsonResponse(os, new JSONObject().put("success", true).put("name", fileName).toString());
     } catch (JSONException e) {
       throw new IOException("JSON error", e);
     }
@@ -492,6 +824,82 @@ public class HttpService extends Service {
       return;
     }
 
+    if (path.startsWith("/api/volume")) {
+      try {
+        String streamName = extractQueryParam(path, "stream");
+        String valueStr = extractQueryParam(path, "value");
+        AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (am == null || streamName == null || valueStr == null) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        int streamType;
+        switch (streamName) {
+          case "music": streamType = AudioManager.STREAM_MUSIC; break;
+          case "ring": streamType = AudioManager.STREAM_RING; break;
+          case "notification": streamType = AudioManager.STREAM_NOTIFICATION; break;
+          case "alarm": streamType = AudioManager.STREAM_ALARM; break;
+          default: sendJsonResponse(os, new JSONObject().put("success", false).toString()); return;
+        }
+        int value = Integer.parseInt(valueStr);
+        am.setStreamVolume(streamType, value, 0);
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/brightness")) {
+      try {
+        String valueStr = extractQueryParam(path, "value");
+        if (valueStr == null) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        int value = Integer.parseInt(valueStr);
+        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, value);
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/rotation")) {
+      try {
+        String enabledStr = extractQueryParam(path, "enabled");
+        if (enabledStr == null) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        int val = "true".equals(enabledStr) ? 1 : 0;
+        Settings.System.putInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, val);
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/icons/upload")) {
+      handleIconUpload(path, rootDir, is, contentLengthStr, contentType, os);
+      return;
+    }
+    if (path.startsWith("/api/icons/assign")) {
+      try {
+        String slot = extractQueryParam(path, "slot");
+        String icon = extractQueryParam(path, "icon");
+        if (slot == null || icon == null) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit().putString("icon_" + slot, icon).apply();
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (JSONException e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+
     if (contentType == null || !contentType.contains("multipart/form-data")) {
       sendResponse(os, 400, "Bad Request", "text/plain", "Expected multipart/form-data");
       return;
@@ -593,6 +1001,25 @@ public class HttpService extends Service {
         sendJsonResponse(os, new JSONObject().put("success", deleted).toString());
       } catch (JSONException e) {
         throw new IOException("JSON error", e);
+      }
+      return;
+    }
+    if (path.startsWith("/api/icons/custom")) {
+      try {
+        String name = extractQueryParam(path, "name");
+        if (name == null || name.isEmpty()) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        if (name.contains("..") || name.contains("/") || name.contains("\\")) {
+          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          return;
+        }
+        File iconFile = new File(getExternalCacheDir(), "custom_icons/" + name);
+        boolean deleted = iconFile.exists() && iconFile.delete();
+        sendJsonResponse(os, new JSONObject().put("success", deleted).toString());
+      } catch (JSONException e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
       }
       return;
     }
