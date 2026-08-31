@@ -25,6 +25,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.ServerSocket;
@@ -637,6 +638,25 @@ public class HttpService extends Service {
       return InetAddress.getByAddress(bytes);
     } catch (UnknownHostException e) {
       return null;
+    }
+  }
+
+  public static boolean isPortAvailable(int checkPort) {
+    ServerSocket ss = null;
+    DatagramSocket ds = null;
+    try {
+      ss = new ServerSocket(checkPort);
+      ss.setReuseAddress(true);
+      ds = new DatagramSocket(checkPort);
+      ds.setReuseAddress(true);
+      return true;
+    } catch (IOException e) {
+      return false;
+    } finally {
+      if (ds != null) ds.close();
+      if (ss != null) {
+        try { ss.close(); } catch (IOException ignored) {}
+      }
     }
   }
 }

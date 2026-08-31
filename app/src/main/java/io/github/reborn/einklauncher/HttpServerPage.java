@@ -178,18 +178,30 @@ public class HttpServerPage extends Activity {
   }
 
   private void startServer() {
+    if (!HttpService.isConnectedToWifi(this)) {
+      Toast.makeText(this, "Please connect to WiFi first", Toast.LENGTH_SHORT).show();
+      return;
+    }
+
+    int port;
     try {
-      int port = Integer.parseInt(etPort.getText().toString().trim());
+      port = Integer.parseInt(etPort.getText().toString().trim());
       if (port <= 0 || port > 65535) {
         etPort.setError("Port must be 1-65535");
         return;
       }
-      HttpService.changePort(
-          PreferenceManager.getDefaultSharedPreferences(this), port);
     } catch (NumberFormatException e) {
       etPort.setError("Invalid port");
       return;
     }
+
+    if (!HttpService.isPortAvailable(port)) {
+      Toast.makeText(this, "Port " + port + " is already in use", Toast.LENGTH_LONG).show();
+      return;
+    }
+
+    HttpService.changePort(
+        PreferenceManager.getDefaultSharedPreferences(this), port);
     sendBroadcast(new Intent(HttpService.ACTION_START_HTTPSERVER));
   }
 
