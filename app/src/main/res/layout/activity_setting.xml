@@ -609,37 +609,6 @@
                 android:minHeight="20dp"
                 android:visibility="gone" />
 
-
-            <LinearLayout
-                android:id="@+id/menu_ftp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/menu_item_height"
-                android:orientation="vertical"
-                android:paddingLeft="20dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp">
-
-                <TextView
-                    android:id="@+id/ftp_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/setting_cloud_manager_wifi_off"
-                    android:textSize="@dimen/menu_item_text_size"
-                    tools:text="网络传书 （开）" />
-
-                <TextView
-                    android:id="@+id/ftp_addr"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginRight="4dp"
-                    tools:text="ftp://192.168.123.121" />
-            </LinearLayout>
-
-
-
         </LinearLayout>
     </ScrollView>
 </FrameLayout>

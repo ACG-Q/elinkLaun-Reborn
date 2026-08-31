@@ -25,16 +25,11 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
-import io.github.reborn.einklauncher.ftpservice.HttpService;
 import io.github.reborn.einklauncher.model.AppSortComparator;
 import io.github.reborn.einklauncher.model.WifiControl;
 
-/**
- * 设置页面 Fragment。
- */
 public class SettingFragment extends Fragment implements View.OnClickListener {
 
-  /** 设置变更回调接口：宿主 Activity 应实现此接口以响应设置变更。 */
   public interface OnSettingChangeListener {
     void onRowNumChanged(int rowNum);
     void onColNumChanged(int colNum);
@@ -57,8 +52,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   private SeekBar fontControl;
   private View rootView;
   private TextView hideDivider;
-  private TextView httpAddr;
-  private TextView httpStatus;
   private TextView showStatusBar;
   private TextView showCustomIcon;
   private TextView showWifiName;
@@ -88,12 +81,7 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     initViews();
     initSpinners();
     initFontControl();
-    updateHttpStatus();
   }
-
-  // =========================================================================
-  // 初始化
-  // =========================================================================
 
   private void initViews() {
     rootView.findViewById(R.id.toBack).setOnClickListener(this);
@@ -103,13 +91,10 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     rootView.findViewById(R.id.btnHideFontControl).setOnClickListener(this);
     rootView.findViewById(R.id.changeFontSize).setOnClickListener(this);
     rootView.findViewById(R.id.helpAbout).setOnClickListener(this);
-    rootView.findViewById(R.id.menu_ftp).setOnClickListener(this);
     rootView.findViewById(R.id.openDeviceManager).setOnClickListener(this);
 
     showStatusBar = rootView.findViewById(R.id.showStatusBar);
     showCustomIcon = rootView.findViewById(R.id.showCustomIcon);
-    httpStatus = rootView.findViewById(R.id.ftp_status);
-    httpAddr = rootView.findViewById(R.id.ftp_addr);
     hideDivider = rootView.findViewById(R.id.hideDivider);
     fontControl = rootView.findViewById(R.id.font_control);
     colNumSpinner = rootView.findViewById(R.id.col_num_spinner);
@@ -124,7 +109,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     showWifiName = rootView.findViewById(R.id.showWifiName);
     showWifiName.setOnClickListener(this);
 
-    // 初始化 UI 状态
     showStatusBar.getPaint().setStrikeThruText(config.isShowStatusBar());
     hideDivider.getPaint().setStrikeThruText(config.isHideDivider());
     hideDivider.setText(config.isHideDivider() ? "显示分隔线" : "隐藏分隔线");
@@ -226,10 +210,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     return (lines <= 2) ? lines : 3;
   }
 
-  // =========================================================================
-  // 点击处理
-  // =========================================================================
-
   @Override
   public void onClick(View v) {
     int id = v.getId();
@@ -249,8 +229,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
       rootView.findViewById(R.id.font_control_p).setVisibility(View.VISIBLE);
     } else if (id == R.id.hideDivider) {
       handleToggleDivider();
-    } else if (id == R.id.menu_ftp) {
-      handleHttp();
     } else if (id == R.id.showWifiName) {
       handleShowWifiName();
     } else if (id == R.id.showCustomIcon) {
@@ -279,23 +257,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     hideDivider.setText(newValue ? "显示分隔线" : "隐藏分隔线");
     listener.onHideDividerChanged(newValue);
     getActivity().onBackPressed();
-  }
-
-  private void handleHttp() {
-    Utils.checkStoragePermission(getActivity(), new Runnable() {
-      @Override
-      public void run() {
-        if (!HttpService.isRunning()) {
-          if (HttpService.isConnectedToWifi(getActivity())) {
-            startHttpServer();
-          } else {
-            Toast.makeText(getActivity(), R.string.toast_need_wifi_connnect, Toast.LENGTH_SHORT).show();
-          }
-        } else {
-          stopHttpServer();
-        }
-      }
-    });
   }
 
   private void handleShowWifiName() {
@@ -334,76 +295,19 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     }
   }
 
-  // =========================================================================
-  // 生命周期
-  // =========================================================================
-
   @Override
   public void onResume() {
     super.onResume();
-    updateHttpStatus();
 
     IntentFilter wifiFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
     Utils.registerReceiverCompat(getActivity(), wifiReceiver, wifiFilter);
-
-    IntentFilter httpFilter = new IntentFilter();
-    httpFilter.addAction(HttpService.ACTION_STARTED);
-    httpFilter.addAction(HttpService.ACTION_STOPPED);
-    httpFilter.addAction(HttpService.ACTION_FAILEDTOSTART);
-    Utils.registerReceiverCompat(getActivity(), httpReceiver, httpFilter);
   }
 
   @Override
   public void onPause() {
     super.onPause();
     getActivity().unregisterReceiver(wifiReceiver);
-    getActivity().unregisterReceiver(httpReceiver);
   }
-
-  // =========================================================================
-  // HTTP 控制
-  // =========================================================================
-
-  private void startHttpServer() {
-    getActivity().sendBroadcast(new Intent(HttpService.ACTION_START_HTTPSERVER));
-  }
-
-  private void stopHttpServer() {
-    getActivity().sendBroadcast(new Intent(HttpService.ACTION_STOP_HTTPSERVER));
-  }
-
-  private void updateHttpStatus() {
-    if (HttpService.isConnectedToWifi(getActivity())) {
-      if (HttpService.isRunning()) {
-        httpStatus.setText(R.string.setting_cloud_manager_on);
-        httpAddr.setVisibility(View.VISIBLE);
-        String address = getHttpAddressString();
-        if (address != null) {
-          httpAddr.setText(address);
-        } else {
-          httpAddr.setVisibility(View.GONE);
-        }
-      } else {
-        httpStatus.setText(R.string.setting_cloud_manager_off);
-        httpAddr.setVisibility(View.GONE);
-      }
-    } else {
-      httpStatus.setText(R.string.setting_cloud_manager_wifi_off);
-      httpAddr.setVisibility(View.GONE);
-    }
-  }
-
-  private String getHttpAddressString() {
-    if (HttpService.getLocalInetAddress(getActivity()) == null) {
-      return null;
-    }
-    return "http://" + HttpService.getLocalInetAddress(getActivity()).getHostAddress()
-        + ":" + HttpService.getPort();
-  }
-
-  // =========================================================================
-  // 广播接收器
-  // =========================================================================
 
   private final BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
     @Override
@@ -411,16 +315,8 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
       ConnectivityManager conMan = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
       NetworkInfo netInfo = conMan.getActiveNetworkInfo();
       if (netInfo == null || netInfo.getType() != ConnectivityManager.TYPE_WIFI) {
-        stopHttpServer();
+        WifiControl.setShowWifiName(false);
       }
-      updateHttpStatus();
-    }
-  };
-
-  private final BroadcastReceiver httpReceiver = new BroadcastReceiver() {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-      updateHttpStatus();
     }
   };
 }
