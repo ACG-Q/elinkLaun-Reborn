@@ -55,6 +55,7 @@ public class HttpService extends Service {
   public static final String ACTION_STOP_HTTPSERVER = "io.github.reborn.einklauncher.ftpservice.HttpService.ACTION_STOP_HTTPSERVER";
 
   private static int port = DEFAULT_PORT;
+  private int pendingPort = -1;
   private ServerSocket serverSocket;
   private ExecutorService threadPool;
   private volatile boolean running = false;
@@ -69,13 +70,16 @@ public class HttpService extends Service {
   }
 
   public static void changePort(SharedPreferences prefs, int port) {
-    prefs.edit().putInt(PORT_PREFERENCE_KEY, port).apply();
+    prefs.edit().putInt(PORT_PREFERENCE_KEY, port).commit();
   }
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
     if (running) {
       return START_STICKY;
+    }
+    if (intent != null && intent.hasExtra("port")) {
+      pendingPort = intent.getIntExtra("port", DEFAULT_PORT);
     }
     new Thread(this::startServer).start();
     return START_STICKY;
@@ -88,8 +92,13 @@ public class HttpService extends Service {
 
   private void startServer() {
     try {
-      SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-      port = getDefaultPortFromPreferences(prefs);
+      if (pendingPort > 0) {
+        port = pendingPort;
+        pendingPort = -1;
+      } else {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        port = getDefaultPortFromPreferences(prefs);
+      }
       serverSocket = new ServerSocket(port);
       serverSocket.setReuseAddress(true);
       threadPool = Executors.newCachedThreadPool();

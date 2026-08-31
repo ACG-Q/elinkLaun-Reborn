@@ -84,5 +84,33 @@
     <string name="notification_click_back_launcher">Click here, back to Launcher</string>
     <string name="app_show_name">App name</string>
     <string name="setting_sort_mode">Sort</string>
+    <string name="file_manager_title">File Manager</string>
+    <string name="file_manager_error_access">Cannot access directory</string>
+    <string name="file_manager_no_app">No app can open this file</string>
+
+    <string name="system_settings">System Settings</string>
+    <string name="system_settings_wifi">WiFi</string>
+    <string name="system_settings_display">Display</string>
+    <string name="system_settings_sound">Sound</string>
+    <string name="system_settings_apps">Apps</string>
+    <string name="system_settings_developer">Developer options</string>
+    <string name="system_settings_battery">Battery</string>
+    <string name="system_settings_storage">Storage</string>
+    <string name="system_settings_notification">Notification</string>
+    <string name="system_settings_location">Location</string>
+    <string name="system_settings_security">Security</string>
+
+    <string name="apk_manager">APK Manager</string>
+    <string name="apk_manager_scan">Scan APKs</string>
+    <string name="apk_manager_no_apk">No APK files found</string>
+    <string name="apk_manager_install">Install</string>
+    <string name="apk_manager_uninstall">Uninstall</string>
+    <string name="apk_manager_info">Info</string>
+    <string name="apk_manager_select_all">Select All</string>
+    <string name="apk_manager_batch_uninstall">Batch Uninstall</string>
+    <string name="apk_manager_installing">Installing APK...</string>
+    <string name="apk_manager_install_success">Installation successful</string>
+    <string name="apk_manager_install_failed">Installation failed</string>
+
     <string name="sort_need_usage_permission">Please grant usage access permission for this sort mode</string>
 </resources>

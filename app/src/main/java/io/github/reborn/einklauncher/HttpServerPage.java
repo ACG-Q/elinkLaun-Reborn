@@ -202,7 +202,9 @@ public class HttpServerPage extends Activity {
 
     HttpService.changePort(
         PreferenceManager.getDefaultSharedPreferences(this), port);
-    sendBroadcast(new Intent(HttpService.ACTION_START_HTTPSERVER));
+    Intent startIntent = new Intent(HttpService.ACTION_START_HTTPSERVER);
+    startIntent.putExtra("port", port);
+    sendBroadcast(startIntent);
   }
 
   private void stopServer() {

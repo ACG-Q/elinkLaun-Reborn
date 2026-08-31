@@ -32,6 +32,7 @@ import java.util.Calendar;
 import java.util.Locale;
 import java.util.Set;
 
+import io.github.reborn.einklauncher.filemanager.FileManager;
 import io.github.reborn.einklauncher.ftpservice.FTPReceiver;
 import io.github.reborn.einklauncher.ftpservice.HttpService;
 import io.github.reborn.einklauncher.model.AdminReceiver;
@@ -328,6 +329,12 @@ public class Launcher extends Activity
       WifiControl.onClickWifiItem();
     } else if (AppDataCenter.HTTP_SERVER_PACKAGE_NAME.equals(pkgName)) {
       startActivity(new Intent(this, HttpServerPage.class));
+    } else if (AppDataCenter.FILE_MANAGER_PACKAGE_NAME.equals(pkgName)) {
+      startActivity(new Intent(this, io.github.reborn.einklauncher.filemanager.FileManager.class));
+    } else if (AppDataCenter.APK_MANAGER_PACKAGE_NAME.equals(pkgName)) {
+      startActivity(new Intent(this, ApkManager.class));
+    } else if (AppDataCenter.SYSTEM_SETTINGS_PACKAGE_NAME.equals(pkgName)) {
+      startActivity(new Intent(this, SystemSettingsPage.class));
     } else {
       ComponentName comp = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
       Intent intent = new Intent(Intent.ACTION_MAIN);

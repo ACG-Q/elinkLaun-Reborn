@@ -16,6 +16,9 @@ public class FTPReceiver extends BroadcastReceiver {
     try {
       if (intent.getAction().equals(HttpService.ACTION_START_HTTPSERVER)) {
         Intent serverService = new Intent(context, HttpService.class);
+        if (intent.hasExtra("port")) {
+          serverService.putExtra("port", intent.getIntExtra("port", HttpService.DEFAULT_PORT));
+        }
         if (!HttpService.isRunning()) {
           context.startService(serverService);
         }

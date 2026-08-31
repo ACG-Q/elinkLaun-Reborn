@@ -62,6 +62,10 @@
         <receiver
             android:name=".ftpservice.FTPReceiver"
             android:exported="false">
+            <intent-filter>
+                <action android:name="io.github.reborn.einklauncher.ftpservice.HttpService.ACTION_START_HTTPSERVER" />
+                <action android:name="io.github.reborn.einklauncher.ftpservice.HttpService.ACTION_STOP_HTTPSERVER" />
+            </intent-filter>
         </receiver>
         
         <provider
@@ -72,6 +76,21 @@
         </provider>
 
         <activity android:name=".HttpServerPage"
+            android:process=":crash_page" android:exported="false">
+            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
+        </activity>
+
+        <activity android:name=".filemanager.FileManager"
+            android:exported="false">
+            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
+        </activity>
+
+        <activity android:name=".ApkManager"
+            android:process=":crash_page" android:exported="false">
+            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
+        </activity>
+
+        <activity android:name=".SystemSettingsPage"
             android:process=":crash_page" android:exported="false">
             <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
         </activity>
