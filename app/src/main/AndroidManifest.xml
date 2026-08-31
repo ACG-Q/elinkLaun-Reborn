@@ -76,7 +76,7 @@
         </provider>
 
         <activity android:name=".HttpServerPage"
-            android:process=":crash_page" android:exported="false">
+            android:exported="false">
             <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
         </activity>
 
