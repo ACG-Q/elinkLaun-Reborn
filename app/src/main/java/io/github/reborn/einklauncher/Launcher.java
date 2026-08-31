@@ -32,7 +32,6 @@ import java.util.Calendar;
 import java.util.Locale;
 import java.util.Set;
 
-import io.github.reborn.einklauncher.ftpservice.FTPReceiver;
 import io.github.reborn.einklauncher.ftpservice.HttpService;
 import io.github.reborn.einklauncher.model.AdminReceiver;
 import io.github.reborn.einklauncher.model.AppDataCenter;
@@ -74,11 +73,9 @@ public class Launcher extends Activity
   private DevicePolicyManager policyManager;
 
   // ---- Receivers ----
-  private FTPReceiver ftpReceiver = new FTPReceiver();
   private boolean batteryRegistered;
   private boolean timeRegistered;
   private boolean usbRegistered;
-  private boolean ftpRegistered;
 
   private final BroadcastReceiver timeReceiver = new BroadcastReceiver() {
     @Override
@@ -521,12 +518,6 @@ public class Launcher extends Activity
     if (!usbRegistered) {
       registerUsbReceiver();
     }
-    if (!ftpRegistered) {
-      IntentFilter ftpFilter = new IntentFilter(HttpService.ACTION_START_HTTPSERVER);
-      ftpFilter.addAction(HttpService.ACTION_STOP_HTTPSERVER);
-      registerCompatReceiver(ftpReceiver, ftpFilter);
-      ftpRegistered = true;
-    }
   }
 
   private void unregisterDynamicReceivers() {
@@ -541,10 +532,6 @@ public class Launcher extends Activity
     if (usbRegistered) {
       unregisterReceiver(usbReceiver);
       usbRegistered = false;
-    }
-    if (ftpRegistered) {
-      unregisterReceiver(ftpReceiver);
-      ftpRegistered = false;
     }
   }
 

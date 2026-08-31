@@ -172,7 +172,7 @@ public class HttpService extends Service {
       File rootDir = Environment.getExternalStorageDirectory();
 
       if ("GET".equals(method)) {
-        handleGet(path, rootDir, os);
+        handleGet(path, uri, rootDir, os);
       } else if ("POST".equals(method)) {
         handlePost(path, rootDir, is, contentLengthStr, contentType, os);
       } else if ("DELETE".equals(method)) {
@@ -190,9 +190,10 @@ public class HttpService extends Service {
 
   // ===== GET =====
 
-  private void handleGet(String path, File rootDir, OutputStream os) throws IOException {
+  private void handleGet(String path, String fullUri, File rootDir, OutputStream os) throws IOException {
     if ("/fm".equals(path)) {
-      sendFileManagerPage(path, rootDir, os);
+      String dirPath = extractQueryParam(fullUri, "path");
+      sendFileManagerPage(dirPath, rootDir, os);
       return;
     }
     if ("/apk".equals(path)) {
@@ -301,9 +302,14 @@ public class HttpService extends Service {
 
   // ===== Web UI: File Manager =====
 
-  private void sendFileManagerPage(String path, File rootDir, OutputStream os) throws IOException {
-    File dir = new File(rootDir, path);
-    if (!dir.exists() || !dir.isDirectory()) dir = rootDir;
+  private void sendFileManagerPage(String dirPath, File rootDir, OutputStream os) throws IOException {
+    File dir;
+    if (dirPath != null && !dirPath.isEmpty()) {
+      dir = new File(dirPath);
+      if (!dir.exists() || !dir.isDirectory()) dir = rootDir;
+    } else {
+      dir = rootDir;
+    }
     File[] files = dir.listFiles();
     if (files == null) files = new File[0];
     java.util.Arrays.sort(files, (a, b) -> {
@@ -657,6 +663,24 @@ public class HttpService extends Service {
           b = b.substring(1, b.length() - 1);
         }
         return b;
+      }
+    }
+    return null;
+  }
+
+  private String extractQueryParam(String uri, String name) {
+    int qIdx = uri.indexOf('?');
+    if (qIdx < 0) return null;
+    String query = uri.substring(qIdx + 1);
+    String[] pairs = query.split("&");
+    for (String pair : pairs) {
+      String[] kv = pair.split("=", 2);
+      if (kv.length == 2 && name.equals(kv[0])) {
+        try {
+          return URLDecoder.decode(kv[1], "UTF-8");
+        } catch (Exception e) {
+          return kv[1];
+        }
       }
     }
     return null;
