@@ -109,15 +109,33 @@ public class AppSortComparator implements Comparator<ResolveInfo> {
   }
 
   private boolean isVirtual(ResolveInfo info) {
+    if (info == null || info.activityInfo == null) return true;
     String pkg = info.activityInfo.packageName;
     return AppDataCenter.LOCK_PACKAGE_NAME.equals(pkg)
-        || AppDataCenter.WIFI_PACKAGE_NAME.equals(pkg);
+        || AppDataCenter.WIFI_PACKAGE_NAME.equals(pkg)
+        || AppDataCenter.HTTP_SERVER_PACKAGE_NAME.equals(pkg);
   }
 
   private int compareByName(ResolveInfo a, ResolveInfo b) {
-    String labelA = a.loadLabel(pm).toString();
-    String labelB = b.loadLabel(pm).toString();
-    return collator.compare(labelA, labelB);
+    CharSequence labelA = safeLabel(a);
+    CharSequence labelB = safeLabel(b);
+    return collator.compare(labelA.toString(), labelB.toString());
+  }
+
+  private CharSequence safeLabel(ResolveInfo info) {
+    if (info == null) return "";
+    if (isVirtual(info)) {
+      String pkg = info.activityInfo != null ? info.activityInfo.packageName : "";
+      if (AppDataCenter.LOCK_PACKAGE_NAME.equals(pkg)) return "Lock Screen";
+      if (AppDataCenter.WIFI_PACKAGE_NAME.equals(pkg)) return "WiFi";
+      if (AppDataCenter.HTTP_SERVER_PACKAGE_NAME.equals(pkg)) return "HTTP Server";
+      return "";
+    }
+    try {
+      return info.loadLabel(pm);
+    } catch (Exception e) {
+      return "";
+    }
   }
 
   private long getInstallTime(ResolveInfo info) {

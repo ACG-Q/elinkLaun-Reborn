@@ -238,6 +238,8 @@ public class AppDataCenter {
     resolveInfo.icon = R.drawable.http_server;
     resolveInfo.activityInfo = new ActivityInfo();
     resolveInfo.activityInfo.packageName = HTTP_SERVER_PACKAGE_NAME;
+    resolveInfo.activityInfo.name = "HttpServerPage";
+    resolveInfo.resolvePackageName = "io.github.reborn.einklauncher";
     return resolveInfo;
   }
 }
