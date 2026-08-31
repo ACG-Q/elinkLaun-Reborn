@@ -9,6 +9,7 @@ var App = (function() {
 
   function getRoute() {
     var hash = location.hash.slice(1) || '';
+    if (hash.charAt(0) === '/') hash = hash.slice(1);
     var q = hash.indexOf('?');
     var path = q >= 0 ? hash.slice(0, q) : hash;
     var query = q >= 0 ? hash.slice(q + 1) : '';
