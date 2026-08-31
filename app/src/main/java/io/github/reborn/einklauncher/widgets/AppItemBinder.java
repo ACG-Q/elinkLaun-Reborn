@@ -176,6 +176,9 @@ public class AppItemBinder {
     } else if (AppDataCenter.LOCK_PACKAGE_NAME.equals(pkg)) {
       loadIcon(holder.appImage, pkg, R.drawable.ic_onekeylock, customIcons);
       holder.appName.setText(R.string.item_lockscreen);
+    } else if (AppDataCenter.HTTP_SERVER_PACKAGE_NAME.equals(pkg)) {
+      loadIcon(holder.appImage, pkg, R.drawable.http_server, customIcons);
+      holder.appName.setText("HTTP Server");
     } else {
       loadIcon(holder.appImage, pkg, info, customIcons);
       holder.appName.setText(iconCache != null

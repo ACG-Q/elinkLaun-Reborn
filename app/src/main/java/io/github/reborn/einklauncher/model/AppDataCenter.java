@@ -25,6 +25,8 @@ public class AppDataCenter {
   public static final String WIFI_PACKAGE_NAME = "E-ink_Launcher.WiFi";
   /** 虚拟包名：一键锁屏入口 */
   public static final String LOCK_PACKAGE_NAME = "E-ink_Launcher.Lock";
+  /** 虚拟包名：HTTP 文件服务器入口 */
+  public static final String HTTP_SERVER_PACKAGE_NAME = "E-ink_Launcher.HttpServer";
 
   private final Context mContext;
   private final List<ResolveInfo> mApps = new ArrayList<>();
@@ -170,6 +172,9 @@ public class AppDataCenter {
     if (!hideApps.contains(WIFI_PACKAGE_NAME)) {
       mApps.add(createWifiIcon());
     }
+    if (!hideApps.contains(HTTP_SERVER_PACKAGE_NAME)) {
+      mApps.add(createHttpServerIcon());
+    }
     sortApps();
     updatePageCount();
   }
@@ -225,6 +230,14 @@ public class AppDataCenter {
     resolveInfo.icon = R.drawable.ic_onekeylock;
     resolveInfo.activityInfo = new ActivityInfo();
     resolveInfo.activityInfo.packageName = LOCK_PACKAGE_NAME;
+    return resolveInfo;
+  }
+
+  private ResolveInfo createHttpServerIcon() {
+    ResolveInfo resolveInfo = new ResolveInfo();
+    resolveInfo.icon = R.drawable.http_server;
+    resolveInfo.activityInfo = new ActivityInfo();
+    resolveInfo.activityInfo.packageName = HTTP_SERVER_PACKAGE_NAME;
     return resolveInfo;
   }
 }

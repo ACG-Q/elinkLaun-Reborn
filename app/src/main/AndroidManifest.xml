@@ -71,6 +71,11 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/filepath"/>
         </provider>
 
+        <activity android:name=".HttpServerPage"
+            android:process=":crash_page" android:exported="false">
+            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
+        </activity>
+
         <activity android:name=".CrashDetailPage"
             android:process=":crash_page" android:exported="false">
             <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>

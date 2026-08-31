@@ -326,6 +326,8 @@ public class Launcher extends Activity
       lockScreen();
     } else if (AppDataCenter.WIFI_PACKAGE_NAME.equals(pkgName)) {
       WifiControl.onClickWifiItem();
+    } else if (AppDataCenter.HTTP_SERVER_PACKAGE_NAME.equals(pkgName)) {
+      startActivity(new Intent(this, HttpServerPage.class));
     } else {
       ComponentName comp = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
       Intent intent = new Intent(Intent.ACTION_MAIN);
