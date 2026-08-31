@@ -899,6 +899,22 @@ public class HttpService extends Service {
       }
       return;
     }
+    if (path.startsWith("/api/open-settings")) {
+      try {
+        String action = extractQueryParam(path, "action");
+        if (action != null && !action.isEmpty()) {
+          Intent intent = new Intent(action);
+          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+          startActivity(intent);
+          sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        } else {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing action").toString());
+        }
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
 
     if (contentType == null || !contentType.contains("multipart/form-data")) {
       sendResponse(os, 400, "Bad Request", "text/plain", "Expected multipart/form-data");

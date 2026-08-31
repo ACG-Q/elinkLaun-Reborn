@@ -113,11 +113,11 @@ var Settings = {
         { name: 'About', action: 'android.settings.DEVICE_INFO_SETTINGS', icon: ICONS.circle }
       ];
       links.forEach(function(s) {
-        h += '<a href="' + s.action + '" class="row" style="text-decoration:none;color:inherit">';
+        h += '<div class="row" style="cursor:pointer" onclick="Settings.openSettings(\'' + s.action + '\')">';
         h += svgIcon(s.icon, 20, 20);
         h += '<div class="row-text"><div class="row-title">' + s.name + '</div></div>';
         h += svgIcon(ICONS.chevron, 16, 16);
-        h += '</a>';
+        h += '</div>';
       });
       h += '</div>';
 
@@ -145,5 +145,11 @@ var Settings = {
 
   setRotation: function(enabled) {
     API.post('/api/rotation?enabled=' + enabled, null).catch(function() {});
+  },
+
+  openSettings: function(action) {
+    API.post('/api/open-settings?action=' + encodeURIComponent(action)).then(function(r) {
+      if (!r.success) showToast('Failed: ' + (r.error || 'Unknown'));
+    }).catch(function() { showToast('Failed to open settings'); });
   }
 };
