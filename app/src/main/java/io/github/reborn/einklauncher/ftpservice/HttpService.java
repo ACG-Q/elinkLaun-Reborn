@@ -13,6 +13,7 @@ import android.os.Environment;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -190,6 +191,19 @@ public class HttpService extends Service {
   // ===== GET =====
 
   private void handleGet(String path, File rootDir, OutputStream os) throws IOException {
+    if ("/fm".equals(path)) {
+      sendFileManagerPage(path, rootDir, os);
+      return;
+    }
+    if ("/apk".equals(path)) {
+      sendApkManagerPage(rootDir, os);
+      return;
+    }
+    if ("/settings".equals(path)) {
+      sendSystemSettingsPage(os);
+      return;
+    }
+
     File file = new File(rootDir, path);
 
     if (!file.exists()) {
@@ -284,6 +298,190 @@ public class HttpService extends Service {
 
     sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
   }
+
+  // ===== Web UI: File Manager =====
+
+  private void sendFileManagerPage(String path, File rootDir, OutputStream os) throws IOException {
+    File dir = new File(rootDir, path);
+    if (!dir.exists() || !dir.isDirectory()) dir = rootDir;
+    File[] files = dir.listFiles();
+    if (files == null) files = new File[0];
+    java.util.Arrays.sort(files, (a, b) -> {
+      if (a.isDirectory() != b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.getName().compareToIgnoreCase(b.getName());
+    });
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>File Manager</title><style>");
+    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
+    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
+    sb.append("h1{font-size:18px;margin-bottom:8px;}");
+    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
+    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
+    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
+    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
+    sb.append(".path{font-size:13px;color:#666;margin-bottom:10px;word-break:break-all;}");
+    sb.append("table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;}");
+    sb.append("th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;font-size:14px;}");
+    sb.append("th{background:#fafafa;font-weight:600;font-size:12px;color:#888;text-transform:uppercase;}");
+    sb.append("tr:hover{background:#f8f9fa;}");
+    sb.append(".name{color:#333;text-decoration:none;}");
+    sb.append(".name.dir{font-weight:600;color:#1a73e8;}");
+    sb.append(".size{color:#888;font-size:12px;white-space:nowrap;}");
+    sb.append(".actions{white-space:nowrap;}");
+    sb.append(".btn{padding:4px 10px;border-radius:4px;border:1px solid #ccc;background:#fff;text-decoration:none;font-size:12px;margin-left:4px;cursor:pointer;}");
+    sb.append(".btn.del{color:#d32f2f;border-color:#d32f2f;}.btn.del:hover{background:#d32f2f;color:#fff;}");
+    sb.append(".btn.dl{color:#188038;border-color:#188038;}.btn.dl:hover{background:#188038;color:#fff;}");
+    sb.append(".upload{margin-top:12px;padding:12px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;}");
+    sb.append(".empty{text-align:center;padding:40px;color:#999;font-size:14px;}");
+    sb.append("</style></head><body>");
+    sb.append("<h1>\ud83d\udcc1 File Manager</h1>");
+    sb.append("<div class=\"nav\"><a href=\"/fm\" class=\"active\">Files</a><a href=\"/apk\">APK Manager</a><a href=\"/settings\">Settings</a></div>");
+    sb.append("<div class=\"path\">\ud83d\udcc2 ").append(escapeHtml(dir.getAbsolutePath())).append("</div>");
+    String parent = dir.getParent();
+    if (parent != null) {
+      sb.append("<table><tr><th>Name</th><th>Size</th><th>Actions</th></tr>");
+      sb.append("<tr><td colspan=\"3\"><a class=\"name dir\" href=\"/fm?path=").append(escapeHtml(parent)).append("\">\u2b06 .. (Parent)</a></td></tr>");
+    } else {
+      sb.append("<table><tr><th>Name</th><th>Size</th><th>Actions</th></tr>");
+    }
+    if (files.length == 0) {
+      sb.append("<tr><td colspan=\"3\" class=\"empty\">Empty directory</td></tr>");
+    } else {
+      for (File f : files) {
+        sb.append("<tr>");
+        String icon = f.isDirectory() ? "\ud83d\udcc1" : "\ud83d\udcc4";
+        String href = "/fm?path=" + escapeHtml(f.getAbsolutePath());
+        sb.append("<td><a class=\"name").append(f.isDirectory() ? " dir" : "").append("\" href=\"").append(href).append("\">").append(icon).append(" ").append(escapeHtml(f.getName())).append("</a></td>");
+        sb.append("<td class=\"size\">"); if (f.isFile()) sb.append(formatSize(f.length())); sb.append("</td>");
+        sb.append("<td class=\"actions\">");
+        if (f.isFile()) sb.append("<a class=\"btn dl\" href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download>Download</a>");
+        sb.append("<a class=\"btn del\" href=\"#\" onclick=\"if(confirm('Delete?'))fetch('").append(escapeHtml(f.getAbsolutePath())).append("',{method:'DELETE'}).then(()=>location.reload());\">Delete</a>");
+        sb.append("</td></tr>");
+      }
+    }
+    sb.append("</table>");
+    sb.append("<form class=\"upload\" method=\"POST\" enctype=\"multipart/form-data\" action=\"").append(escapeHtml(dir.getAbsolutePath())).append("\">");
+    sb.append("<input type=\"file\" name=\"file\" multiple style=\"margin-right:8px;\">");
+    sb.append("<button type=\"submit\" style=\"padding:6px 16px;background:#4285f4;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;\">Upload</button>");
+    sb.append("</form></body></html>");
+    sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
+  }
+
+  // ===== Web UI: APK Manager =====
+
+  private void sendApkManagerPage(File rootDir, OutputStream os) throws IOException {
+    java.util.List<File> apkFiles = new java.util.ArrayList<>();
+    String[] scanDirs = { rootDir.getAbsolutePath() + "/Download", rootDir.getAbsolutePath() + "/Downloads", "/sdcard/Download" };
+    for (String dirPath : scanDirs) {
+      File dir = new File(dirPath);
+      if (!dir.exists() || !dir.isDirectory()) continue;
+      File[] found = dir.listFiles();
+      if (found == null) continue;
+      for (File f : found) { if (f.getName().toLowerCase().endsWith(".apk") && f.isFile()) apkFiles.add(f); }
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>APK Manager</title><style>");
+    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
+    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
+    sb.append("h1{font-size:18px;margin-bottom:8px;}");
+    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
+    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
+    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
+    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
+    sb.append("table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;}");
+    sb.append("th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8e8e8;font-size:14px;}");
+    sb.append("th{background:#fafafa;font-weight:600;font-size:12px;color:#888;}");
+    sb.append("tr:hover{background:#f8f9fa;}");
+    sb.append(".btn{padding:6px 14px;border-radius:4px;border:1px solid #188038;background:#fff;color:#188038;text-decoration:none;font-size:13px;cursor:pointer;}");
+    sb.append(".btn:hover{background:#188038;color:#fff;}");
+    sb.append(".empty{text-align:center;padding:40px;color:#999;font-size:14px;}");
+    sb.append("</style></head><body>");
+    sb.append("<h1>\ud83d\udce6 APK Manager</h1>");
+    sb.append("<div class=\"nav\"><a href=\"/fm\">Files</a><a href=\"/apk\" class=\"active\">APK Manager</a><a href=\"/settings\">Settings</a></div>");
+    if (apkFiles.isEmpty()) {
+      sb.append("<div class=\"empty\">No APK files found in Download folders</div>");
+    } else {
+      sb.append("<table><tr><th>File</th><th>Size</th><th>Location</th><th>Action</th></tr>");
+      for (File f : apkFiles) {
+        sb.append("<tr><td>").append(escapeHtml(f.getName())).append("</td>");
+        sb.append("<td>").append(formatSize(f.length())).append("</td>");
+        sb.append("<td>").append(escapeHtml(f.getParent())).append("</td>");
+        sb.append("<td><a class=\"btn\" href=\"").append(escapeHtml(f.getAbsolutePath())).append("\" download>Install</a></td></tr>");
+      }
+      sb.append("</table>");
+    }
+    sb.append("</body></html>");
+    sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
+  }
+
+  // ===== Web UI: System Settings =====
+
+  private void sendSystemSettingsPage(OutputStream os) throws IOException {
+    java.util.List<SettingEntry> settings = new java.util.ArrayList<>();
+    settings.add(new SettingEntry("WiFi", "Wi-Fi settings", Settings.ACTION_WIFI_SETTINGS));
+    settings.add(new SettingEntry("Display", "Brightness, screen timeout", Settings.ACTION_DISPLAY_SETTINGS));
+    settings.add(new SettingEntry("Sound", "Ringtone, volume", Settings.ACTION_SOUND_SETTINGS));
+    settings.add(new SettingEntry("Apps", "App management", Settings.ACTION_APPLICATION_DETAILS_SETTINGS));
+    settings.add(new SettingEntry("Developer", "Developer options", Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));
+    settings.add(new SettingEntry("Battery", "Battery saver", Settings.ACTION_BATTERY_SAVER_SETTINGS));
+    settings.add(new SettingEntry("Storage", "Internal storage", Settings.ACTION_INTERNAL_STORAGE_SETTINGS));
+    settings.add(new SettingEntry("Notifications", "Notification access", Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+    settings.add(new SettingEntry("Location", "Location services", Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+    settings.add(new SettingEntry("Security", "Lock screen, encryption", Settings.ACTION_SECURITY_SETTINGS));
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    sb.append("<title>System Settings</title><style>");
+    sb.append("*{margin:0;padding:0;box-sizing:border-box;}");
+    sb.append("body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;padding:12px;}");
+    sb.append("h1{font-size:18px;margin-bottom:8px;}");
+    sb.append(".nav{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}");
+    sb.append(".nav a{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:6px;text-decoration:none;color:#333;font-size:13px;}");
+    sb.append(".nav a:hover{background:#e8f0fe;border-color:#4285f4;}");
+    sb.append(".nav a.active{background:#4285f4;color:#fff;border-color:#4285f4;}");
+    sb.append(".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}");
+    sb.append(".card{background:#fff;border-radius:8px;padding:16px;text-align:center;border:1px solid #e0e0e0;text-decoration:none;color:#333;cursor:pointer;}");
+    sb.append(".card:hover{border-color:#4285f4;background:#f8f9fa;}");
+    sb.append(".icon{font-size:32px;margin-bottom:8px;}");
+    sb.append(".title{font-weight:600;font-size:14px;}");
+    sb.append(".desc{font-size:11px;color:#888;margin-top:4px;}");
+    sb.append("</style></head><body>");
+    sb.append("<h1>\u2699\ufe0f System Settings</h1>");
+    sb.append("<div class=\"nav\"><a href=\"/fm\">Files</a><a href=\"/apk\">APK Manager</a><a href=\"/settings\" class=\"active\">Settings</a></div>");
+    sb.append("<div class=\"grid\">");
+    for (SettingEntry s : settings) {
+      sb.append("<a class=\"card\" href=\"").append(escapeHtml(s.action)).append("\">");
+      sb.append("<div class=\"icon\">").append(s.icon).append("</div>");
+      sb.append("<div class=\"title\">").append(escapeHtml(s.title)).append("</div>");
+      sb.append("<div class=\"desc\">").append(escapeHtml(s.desc)).append("</div>");
+      sb.append("</a>");
+    }
+    sb.append("</div></body></html>");
+    sendResponse(os, 200, "OK", "text/html; charset=UTF-8", sb.toString());
+  }
+
+  private static class SettingEntry {
+    String title; String desc; String action; String icon;
+    SettingEntry(String title, String desc, String action) {
+      this.title = title; this.desc = desc; this.action = action;
+      switch (title) {
+        case "WiFi": this.icon = "\ud83d\udcf1"; break;
+        case "Display": this.icon = "\u2600\ufe0f"; break;
+        case "Sound": this.icon = "\ud83d\udd0a"; break;
+        case "Apps": this.icon = "\ud83d\udcf1"; break;
+        case "Developer": this.icon = "\ud83d\udd27"; break;
+        case "Battery": this.icon = "\ud83d\udd0b"; break;
+        case "Storage": this.icon = "\ud83d\udcbe"; break;
+        case "Notifications": this.icon = "\ud83d\udd14"; break;
+        case "Location": this.icon = "\ud83d\udccd"; break;
+        case "Security": this.icon = "\ud83d\udd12"; break;
+        default: this.icon = "\u2699\ufe0f";
+      }
+    }
+  }
+
+  // ===== POST (Upload) =====
 
   private void sendFile(File file, OutputStream os) throws IOException {
     String name = file.getName().toLowerCase();

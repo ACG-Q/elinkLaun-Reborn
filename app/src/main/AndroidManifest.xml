@@ -80,21 +80,6 @@
             <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
         </activity>
 
-        <activity android:name=".filemanager.FileManager"
-            android:exported="false">
-            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
-        </activity>
-
-        <activity android:name=".ApkManager"
-            android:process=":crash_page" android:exported="false">
-            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
-        </activity>
-
-        <activity android:name=".SystemSettingsPage"
-            android:process=":crash_page" android:exported="false">
-            <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>
-        </activity>
-
         <activity android:name=".CrashDetailPage"
             android:process=":crash_page" android:exported="false">
             <meta-data android:name="com.yotadevices.keep_on_epd_screen" android:value="true"/>

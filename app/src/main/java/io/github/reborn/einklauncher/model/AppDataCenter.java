@@ -27,9 +27,6 @@ public class AppDataCenter {
   public static final String LOCK_PACKAGE_NAME = "E-ink_Launcher.Lock";
   /** 虚拟包名：HTTP 文件服务器入口 */
   public static final String HTTP_SERVER_PACKAGE_NAME = "E-ink_Launcher.HttpServer";
-  public static final String FILE_MANAGER_PACKAGE_NAME = "E-ink_Launcher.FileManager";
-  public static final String APK_MANAGER_PACKAGE_NAME = "E-ink_Launcher.ApkManager";
-  public static final String SYSTEM_SETTINGS_PACKAGE_NAME = "E-ink_Launcher.SystemSettings";
 
   private final Context mContext;
   private final List<ResolveInfo> mApps = new ArrayList<>();
@@ -178,15 +175,6 @@ public class AppDataCenter {
     if (!hideApps.contains(HTTP_SERVER_PACKAGE_NAME)) {
       mApps.add(createHttpServerIcon());
     }
-    if (!hideApps.contains(FILE_MANAGER_PACKAGE_NAME)) {
-      mApps.add(createFileManagerIcon());
-    }
-    if (!hideApps.contains(APK_MANAGER_PACKAGE_NAME)) {
-      mApps.add(createApkManagerIcon());
-    }
-    if (!hideApps.contains(SYSTEM_SETTINGS_PACKAGE_NAME)) {
-      mApps.add(createSystemSettingsIcon());
-    }
     sortApps();
     updatePageCount();
   }
@@ -251,36 +239,6 @@ public class AppDataCenter {
     resolveInfo.activityInfo = new ActivityInfo();
     resolveInfo.activityInfo.packageName = HTTP_SERVER_PACKAGE_NAME;
     resolveInfo.activityInfo.name = "HttpServerPage";
-    resolveInfo.resolvePackageName = "io.github.reborn.einklauncher";
-    return resolveInfo;
-  }
-
-  private ResolveInfo createFileManagerIcon() {
-    ResolveInfo resolveInfo = new ResolveInfo();
-    resolveInfo.icon = R.drawable.ic_folder_gray_48dp;
-    resolveInfo.activityInfo = new ActivityInfo();
-    resolveInfo.activityInfo.packageName = FILE_MANAGER_PACKAGE_NAME;
-    resolveInfo.activityInfo.name = "filemanager.FileManager";
-    resolveInfo.resolvePackageName = "io.github.reborn.einklauncher";
-    return resolveInfo;
-  }
-
-  private ResolveInfo createApkManagerIcon() {
-    ResolveInfo resolveInfo = new ResolveInfo();
-    resolveInfo.icon = R.drawable.ic_apk_box;
-    resolveInfo.activityInfo = new ActivityInfo();
-    resolveInfo.activityInfo.packageName = APK_MANAGER_PACKAGE_NAME;
-    resolveInfo.activityInfo.name = "ApkManager";
-    resolveInfo.resolvePackageName = "io.github.reborn.einklauncher";
-    return resolveInfo;
-  }
-
-  private ResolveInfo createSystemSettingsIcon() {
-    ResolveInfo resolveInfo = new ResolveInfo();
-    resolveInfo.icon = R.drawable.system_setting_settings;
-    resolveInfo.activityInfo = new ActivityInfo();
-    resolveInfo.activityInfo.packageName = SYSTEM_SETTINGS_PACKAGE_NAME;
-    resolveInfo.activityInfo.name = "SystemSettingsPage";
     resolveInfo.resolvePackageName = "io.github.reborn.einklauncher";
     return resolveInfo;
   }
