@@ -32,6 +32,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.PushbackInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -159,7 +160,8 @@ public class HttpService extends Service {
       InputStream is = client.getInputStream();
       OutputStream os = client.getOutputStream();
 
-      BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+      PushbackInputStream pis = new PushbackInputStream(is, 8192);
+      BufferedReader reader = new BufferedReader(new InputStreamReader(pis, "UTF-8"));
       String requestLine = reader.readLine();
       if (requestLine == null || requestLine.isEmpty()) {
         client.close();
@@ -204,7 +206,7 @@ public class HttpService extends Service {
       if ("GET".equals(method)) {
         handleGet(path, uri, rootDir, os);
       } else if ("POST".equals(method)) {
-        handlePost(path, uri, rootDir, is, contentLengthStr, contentType, os);
+        handlePost(path, uri, rootDir, pis, contentLengthStr, contentType, os);
       } else if ("DELETE".equals(method)) {
         handleDelete(path, uri, rootDir, os);
       } else {
@@ -706,7 +708,7 @@ public class HttpService extends Service {
     fis.close();
   }
 
-  private void handleIconUpload(String path, File rootDir, InputStream is,
+  private void handleIconUpload(String path, File rootDir, PushbackInputStream pis,
       String contentLengthStr, String contentType, OutputStream os) throws IOException {
     try {
       if (contentType == null || !contentType.contains("multipart/form-data")) {
@@ -726,7 +728,7 @@ public class HttpService extends Service {
         sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
         return;
       }
-      byte[] allBytes = readFully(is, contentLength);
+      byte[] allBytes = readFully(pis, contentLength);
       String delimiter = "--" + boundary;
       int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
       if (pos < 0) {
@@ -771,7 +773,7 @@ public class HttpService extends Service {
     }
   }
 
-  private void handleIconReplace(String fullUri, InputStream is,
+  private void handleIconReplace(String fullUri, PushbackInputStream pis,
       String contentLengthStr, String contentType, OutputStream os) throws IOException {
     try {
       String pkg = extractQueryParam(fullUri, "pkg");
@@ -796,7 +798,7 @@ public class HttpService extends Service {
         sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
         return;
       }
-      byte[] allBytes = readFully(is, contentLength);
+      byte[] allBytes = readFully(pis, contentLength);
       String delimiter = "--" + boundary;
       int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
       if (pos < 0) {
@@ -896,7 +898,7 @@ public class HttpService extends Service {
 
   // ===== POST (Upload) =====
 
-  private void handlePost(String path, String fullUri, File rootDir, InputStream is,
+  private void handlePost(String path, String fullUri, File rootDir, PushbackInputStream pis,
       String contentLengthStr, String contentType, OutputStream os) throws IOException {
     if (path.startsWith("/api/upload")) {
       try {
@@ -923,7 +925,16 @@ public class HttpService extends Service {
           sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
           return;
         }
-        byte[] allBytes = readFully(is, contentLength);
+        byte[] allBytes;
+        if (contentLength > 0) {
+          allBytes = readFully(pis, contentLength);
+        } else {
+          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+          byte[] buf = new byte[8192];
+          int read;
+          while ((read = pis.read(buf)) != -1) baos.write(buf, 0, read);
+          allBytes = baos.toByteArray();
+        }
         int uploaded = 0;
         String lastFilePath = null;
         String delimiter = "--" + boundary;
@@ -1035,7 +1046,7 @@ public class HttpService extends Service {
       return;
     }
     if (path.startsWith("/api/icons/upload")) {
-      handleIconUpload(path, rootDir, is, contentLengthStr, contentType, os);
+      handleIconUpload(path, rootDir, pis, contentLengthStr, contentType, os);
       return;
     }
     if (path.startsWith("/api/icons/assign")) {
@@ -1055,7 +1066,7 @@ public class HttpService extends Service {
       return;
     }
     if (path.startsWith("/api/icons/replace")) {
-      handleIconReplace(fullUri, is, contentLengthStr, contentType, os);
+      handleIconReplace(fullUri, pis, contentLengthStr, contentType, os);
       return;
     }
     if (path.startsWith("/api/open-settings")) {
@@ -1160,7 +1171,7 @@ public class HttpService extends Service {
       return;
     }
 
-    byte[] allBytes = readFully(is, contentLength);
+    byte[] allBytes = readFully(pis, contentLength);
     File targetDir = new File(rootDir, path);
     if (!targetDir.exists() || !targetDir.isDirectory()) {
       sendResponse(os, 400, "Bad Request", "text/plain", "Target is not a directory");
@@ -1367,11 +1378,11 @@ public class HttpService extends Service {
     return null;
   }
 
-  private byte[] readFully(InputStream is, int length) throws IOException {
+  private byte[] readFully(PushbackInputStream pis, int length) throws IOException {
     byte[] data = new byte[length];
     int offset = 0;
     while (offset < length) {
-      int read = is.read(data, offset, length - offset);
+      int read = pis.read(data, offset, length - offset);
       if (read < 0) break;
       offset += read;
     }
