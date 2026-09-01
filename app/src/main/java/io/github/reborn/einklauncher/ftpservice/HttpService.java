@@ -60,6 +60,8 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -222,7 +224,7 @@ public class HttpService extends Service {
     if ("/api/stats".equals(path)) { sendJsonStats(rootDir, os); return; }
     if ("/api/files".equals(path)) { sendJsonFiles(extractQueryParam(fullUri, "path"), rootDir, os); return; }
     if ("/api/apps".equals(path)) { sendJsonApps(os); return; }
-    if ("/api/app-icon".equals(path)) { sendJsonAppIcon(extractQueryParam(fullUri, "pkg"), os); return; }
+    if ("/api/app-icon".equals(path)) { sendImageIcon(extractQueryParam(fullUri, "pkg"), os); return; }
     if ("/api/icons".equals(path)) { sendJsonIcons(os); return; }
     if ("/api/device".equals(path)) { sendJsonDevice(os); return; }
     if ("/api/battery".equals(path)) { sendJsonBattery(os); return; }
@@ -373,9 +375,9 @@ public class HttpService extends Service {
     }
   }
 
-  private void sendJsonAppIcon(String pkg, OutputStream os) throws IOException {
+  private void sendImageIcon(String pkg, OutputStream os) throws IOException {
     if (pkg == null || pkg.isEmpty()) {
-      try { sendJsonResponse(os, new JSONObject().put("error", "Missing pkg").toString()); } catch (JSONException ignored) {}
+      sendEmptyIcon(os);
       return;
     }
     try {
@@ -394,16 +396,26 @@ public class HttpService extends Service {
         Bitmap scaled = Bitmap.createScaledBitmap(icon, 96, 96, true);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         scaled.compress(Bitmap.CompressFormat.PNG, 100, baos);
-        String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-        JSONObject resp = new JSONObject();
-        resp.put("icon", "data:image/png;base64," + b64);
-        sendJsonResponse(os, resp.toString());
+        byte[] body = baos.toByteArray();
+        String header = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n"
+            + "Content-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
+        os.write(header.getBytes("UTF-8"));
+        os.write(body);
+        os.flush();
       } else {
-        sendJsonResponse(os, new JSONObject().put("icon", "").toString());
+        sendEmptyIcon(os);
       }
     } catch (Exception e) {
-      try { sendJsonResponse(os, new JSONObject().put("icon", "").toString()); } catch (JSONException ignored) {}
+      sendEmptyIcon(os);
     }
+  }
+
+  private void sendEmptyIcon(OutputStream os) throws IOException {
+    Bitmap bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
+    Canvas c = new Canvas(bmp);
+    c.drawColor(Color.TRANSPARENT);
+    bmp.compress(Bitmap.CompressFormat.PNG, 100, os);
+    bmp.recycle();
   }
 
   private void sendJsonIcons(OutputStream os) throws IOException {
