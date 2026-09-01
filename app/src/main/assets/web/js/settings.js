@@ -90,9 +90,9 @@ var Settings = {
       h += '<div class="row">';
       h += '<div class="row-text"><div class="row-title">Screen rotation</div>';
       h += '<div class="row-sub">' + (rotation.enabled ? 'Auto-rotate is ON' : 'Auto-rotate is OFF') + '</div></div>';
-      h += '<label style="position:relative;display:inline-block;width:48px;height:28px">';
-      h += '<input type="checkbox" ' + (rotation.enabled ? 'checked' : '') + ' onchange="Settings.setRotation(this.checked)" style="opacity:0;width:0;height:0">';
-      h += '<span style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:14px;transition:.2s"></span>';
+      h += '<label class="toggle">';
+      h += '<input type="checkbox" ' + (rotation.enabled ? 'checked' : '') + ' onchange="Settings.setRotation(this.checked)">';
+      h += '<span class="slider"></span>';
       h += '</label>';
       h += '</div></div>';
 

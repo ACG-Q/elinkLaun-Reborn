@@ -12,6 +12,12 @@ var FM = {
         + svgIcon(ICONS.folder, 16, 16) + ' ' + esc(data.currentPath) + '</div></div>';
 
       html += '<div class="card">';
+      if (parent && parent !== data.currentPath) {
+        html += '<div class="row">';
+        html += svgIcon(ICONS.back, 20, 20);
+        html += '<div class="row-text"><a href="#/fm?path=' + encodeURIComponent(parent) + '" class="row-title">..</a></div>';
+        html += '</div>';
+      }
       if (items.length === 0) {
         html += '<div class="empty">' + svgIcon(ICONS.folder, 48, 48) + '<p>Empty directory</p></div>';
       } else {

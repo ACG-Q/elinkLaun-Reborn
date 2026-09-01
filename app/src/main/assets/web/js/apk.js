@@ -1,11 +1,10 @@
 var APK = {
   render: function(el) {
-    var self = this;
     var html = '';
     html += '<div class="search-bar">';
     html += '<input type="text" id="app-search" placeholder="Search apps..." class="search-input">';
     html += '</div>';
-    html += '<div id="app-list" class="grid"></div>';
+    html += '<div id="app-list" class="grid search-grid"></div>';
     html += '<div class="card" style="margin-top:16px">';
     html += '<div class="card-title">Install APK</div>';
     html += '<div class="upload-area" id="apk-upload">';
@@ -15,7 +14,7 @@ var APK = {
     el.innerHTML = html;
 
     document.getElementById('app-search').addEventListener('input', function() {
-      self.filter(this.value);
+      APK.filter(this.value);
     });
 
     var uploadArea = document.getElementById('apk-upload');
@@ -24,20 +23,19 @@ var APK = {
     uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); });
     uploadArea.addEventListener('drop', function(e) {
       e.preventDefault();
-      if (e.dataTransfer.files.length) self.installApk(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files.length) APK.installApk(e.dataTransfer.files[0]);
     });
     fileInput.addEventListener('change', function() {
-      if (this.files.length) self.installApk(this.files[0]);
+      if (this.files.length) APK.installApk(this.files[0]);
     });
 
-    self.loadApps();
+    APK.loadApps();
   },
 
   loadApps: function() {
-    var self = this;
     API.get('/api/apps').then(function(data) {
-      self._items = data.items || [];
-      self.renderList(self._items);
+      APK._items = data.items || [];
+      APK.renderList(APK._items);
     }).catch(function() {
       document.getElementById('app-list').innerHTML = '<div class="empty"><p>Failed to load apps</p></div>';
     });
@@ -48,7 +46,7 @@ var APK = {
     items.forEach(function(app) {
       html += '<div class="grid-item app-item" data-pkg="' + esc(app.packageName) + '">';
       html += '<img class="app-icon" src="/api/app-icon?pkg=' + encodeURIComponent(app.packageName) + '" ';
-      html += 'onerror="this.src=\'data:image/svg+xml,<svg xmlns=\\\'http://www.w3.org/2000/svg\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'%23999\\\'><rect width=\\\'24\\\' height=\\\'24\\\' rx=\\\'4\\\'/></svg>\'">';
+      html += 'onerror="this.style.display=\'none\'">';
       html += '<div class="app-name">' + esc(app.name) + '</div>';
       html += '<div class="app-pkg">' + esc(app.packageName) + '</div>';
       html += '<div class="app-actions">';
@@ -62,12 +60,12 @@ var APK = {
   },
 
   filter: function(q) {
-    if (!this._items) return;
+    if (!APK._items) return;
     var lower = q.toLowerCase();
-    var filtered = this._items.filter(function(app) {
+    var filtered = APK._items.filter(function(app) {
       return app.name.toLowerCase().indexOf(lower) >= 0 || app.packageName.toLowerCase().indexOf(lower) >= 0;
     });
-    this.renderList(filtered);
+    APK.renderList(filtered);
   },
 
   openApp: function(pkg) {

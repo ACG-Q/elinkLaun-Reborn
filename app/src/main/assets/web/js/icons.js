@@ -1,11 +1,10 @@
 var Icons = {
   render: function(el) {
-    var self = this;
     var html = '';
     html += '<div class="search-bar">';
     html += '<input type="text" id="icon-search" placeholder="Search apps..." class="search-input">';
     html += '</div>';
-    html += '<div id="icon-list" class="grid"></div>';
+    html += '<div id="icon-list" class="grid search-grid"></div>';
     html += '<div class="card" style="margin-top:16px">';
     html += '<div class="card-title">Upload Custom Icon</div>';
     html += '<div class="upload-area" id="icon-upload">';
@@ -15,7 +14,7 @@ var Icons = {
     el.innerHTML = html;
 
     document.getElementById('icon-search').addEventListener('input', function() {
-      self.filter(this.value);
+      Icons.filter(this.value);
     });
 
     var uploadArea = document.getElementById('icon-upload');
@@ -24,20 +23,19 @@ var Icons = {
     uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); });
     uploadArea.addEventListener('drop', function(e) {
       e.preventDefault();
-      if (e.dataTransfer.files.length) self.selectFileForUpload(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files.length) Icons.selectFileForUpload(e.dataTransfer.files[0]);
     });
     fileInput.addEventListener('change', function() {
-      if (this.files.length) self.selectFileForUpload(this.files[0]);
+      if (this.files.length) Icons.selectFileForUpload(this.files[0]);
     });
 
-    self.loadIcons();
+    Icons.loadIcons();
   },
 
   loadIcons: function() {
-    var self = this;
     API.get('/api/icons').then(function(data) {
-      self._items = data.items || [];
-      self.renderList(self._items);
+      Icons._items = data.items || [];
+      Icons.renderList(Icons._items);
     }).catch(function() {
       document.getElementById('icon-list').innerHTML = '<div class="empty"><p>Failed to load icons</p></div>';
     });
@@ -49,7 +47,7 @@ var Icons = {
       html += '<div class="grid-item icon-item" data-pkg="' + esc(app.packageName) + '">';
       html += '<div class="icon-wrapper" data-pkg="' + esc(app.packageName) + '">';
       html += '<img class="app-icon" src="/api/app-icon?pkg=' + encodeURIComponent(app.packageName) + '" ';
-      html += 'onerror="this.src=\'data:image/svg+xml,<svg xmlns=\\\'http://www.w3.org/2000/svg\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'%23999\\\'><rect width=\\\'24\\\' height=\\\'24\\\' rx=\\\'4\\\'/></svg>\'">';
+      html += 'onerror="this.style.display=\'none\'">';
       if (app.hasCustomIcon) {
         html += '<span class="custom-badge">Custom</span>';
       }
@@ -78,12 +76,12 @@ var Icons = {
   },
 
   filter: function(q) {
-    if (!this._items) return;
+    if (!Icons._items) return;
     var lower = q.toLowerCase();
-    var filtered = this._items.filter(function(app) {
+    var filtered = Icons._items.filter(function(app) {
       return app.name.toLowerCase().indexOf(lower) >= 0 || app.packageName.toLowerCase().indexOf(lower) >= 0;
     });
-    this.renderList(filtered);
+    Icons.renderList(filtered);
   },
 
   replaceIcon: function(pkg, file) {
@@ -111,16 +109,16 @@ var Icons = {
   },
 
   selectFileForUpload: function(file) {
-    this._pendingFile = file;
+    Icons._pendingFile = file;
     showToast('File selected. Click "Replace" on any app.');
   },
 
   uploadFor: function(pkg) {
-    if (!this._pendingFile) {
+    if (!Icons._pendingFile) {
       showToast('Select an image file first');
       return;
     }
-    this.replaceIcon(pkg, this._pendingFile);
-    this._pendingFile = null;
+    Icons.replaceIcon(pkg, Icons._pendingFile);
+    Icons._pendingFile = null;
   }
 };
