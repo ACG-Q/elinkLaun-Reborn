@@ -4,29 +4,11 @@ var Icons = {
     html += '<div class="search-bar">';
     html += '<input type="text" id="icon-search" placeholder="Search apps..." class="search-input">';
     html += '</div>';
-    html += '<div id="icon-list" class="grid search-grid"></div>';
-    html += '<div class="card" style="margin-top:16px">';
-    html += '<div class="card-title">Upload Custom Icon</div>';
-    html += '<div class="upload-area" id="icon-upload">';
-    html += '<p>Click or drag image here, then select target app</p>';
-    html += '<input type="file" id="icon-file" accept="image/*" style="display:none">';
-    html += '</div></div>';
+    html += '<div id="icon-list" class="icon-grid"></div>';
     el.innerHTML = html;
 
     document.getElementById('icon-search').addEventListener('input', function() {
       Icons.filter(this.value);
-    });
-
-    var uploadArea = document.getElementById('icon-upload');
-    var fileInput = document.getElementById('icon-file');
-    uploadArea.addEventListener('click', function() { fileInput.click(); });
-    uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); });
-    uploadArea.addEventListener('drop', function(e) {
-      e.preventDefault();
-      if (e.dataTransfer.files.length) Icons.selectFileForUpload(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', function() {
-      if (this.files.length) Icons.selectFileForUpload(this.files[0]);
     });
 
     Icons.loadIcons();
@@ -44,30 +26,28 @@ var Icons = {
   renderList: function(items) {
     var html = '';
     items.forEach(function(app) {
-      html += '<div class="grid-item icon-item" data-pkg="' + esc(app.packageName) + '">';
-      html += '<div class="icon-wrapper" data-pkg="' + esc(app.packageName) + '">';
-      html += '<img class="app-icon" src="/api/app-icon?pkg=' + encodeURIComponent(app.packageName) + '" ';
-      html += 'onerror="this.style.display=\'none\'">';
+      var iconUrl = '/api/app-icon?pkg=' + encodeURIComponent(app.packageName);
+      html += '<div class="icon-slot" data-pkg="' + esc(app.packageName) + '" ';
+      html += 'style="background-image:url(\'' + iconUrl + '\')" ';
+      html += 'onclick="Icons.clickSlot(\'' + esc(app.packageName) + '\')">';
+      html += '<input type="file" accept="image/*" style="display:none" data-pkg="' + esc(app.packageName) + '">';
+      html += '<div class="icon-slot-name">' + esc(app.name) + '</div>';
       if (app.hasCustomIcon) {
-        html += '<span class="custom-badge">Custom</span>';
+        html += '<div class="icon-slot-badge">Custom</div>';
       }
       html += '</div>';
-      html += '<div class="app-name">' + esc(app.name) + '</div>';
-      html += '<div class="icon-actions">';
-      html += '<button class="btn btn-sm" onclick="Icons.uploadFor(\'' + esc(app.packageName) + '\')">Replace</button>';
-      if (app.hasCustomIcon) {
-        html += '<button class="btn btn-sm btn-danger" onclick="Icons.resetIcon(\'' + esc(app.packageName) + '\')">Reset</button>';
-      }
-      html += '</div></div>';
     });
     document.getElementById('icon-list').innerHTML = html;
 
-    document.querySelectorAll('.icon-wrapper').forEach(function(el) {
-      el.addEventListener('dragover', function(e) { e.preventDefault(); });
-      el.addEventListener('drop', function(e) {
+    document.querySelectorAll('.icon-slot').forEach(function(slot) {
+      slot.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); });
+      slot.addEventListener('dragleave', function(e) { e.currentTarget.classList.remove('drag-over'); });
+      slot.addEventListener('dragenter', function(e) { e.currentTarget.classList.add('drag-over'); });
+      slot.addEventListener('drop', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        var pkg = el.getAttribute('data-pkg');
+        e.currentTarget.classList.remove('drag-over');
+        var pkg = e.currentTarget.getAttribute('data-pkg');
         if (e.dataTransfer.files.length && pkg) {
           Icons.replaceIcon(pkg, e.dataTransfer.files[0]);
         }
@@ -84,8 +64,18 @@ var Icons = {
     Icons.renderList(filtered);
   },
 
+  clickSlot: function(pkg) {
+    var input = document.querySelector('.icon-slot[data-pkg="' + pkg + '"] input[type="file"]');
+    if (input) {
+      input.onchange = function() {
+        if (this.files.length) Icons.replaceIcon(pkg, this.files[0]);
+      };
+      input.click();
+    }
+  },
+
   replaceIcon: function(pkg, file) {
-    showToast('Uploading icon for ' + pkg + '...');
+    showToast('Uploading icon...');
     var fd = new FormData();
     fd.append('file', file);
     API.post('/api/icons/replace?pkg=' + encodeURIComponent(pkg), fd).then(function(d) {
@@ -98,27 +88,5 @@ var Icons = {
     }).catch(function() {
       showToast('Upload failed');
     });
-  },
-
-  resetIcon: function(pkg) {
-    if (!confirm('Reset icon for ' + pkg + '?')) return;
-    API.del('/api/icons/replace?pkg=' + encodeURIComponent(pkg)).then(function(d) {
-      showToast(d.success ? 'Icon reset' : 'Failed');
-      Icons.loadIcons();
-    });
-  },
-
-  selectFileForUpload: function(file) {
-    Icons._pendingFile = file;
-    showToast('File selected. Click "Replace" on any app.');
-  },
-
-  uploadFor: function(pkg) {
-    if (!Icons._pendingFile) {
-      showToast('Select an image file first');
-      return;
-    }
-    Icons.replaceIcon(pkg, Icons._pendingFile);
-    Icons._pendingFile = null;
   }
 };
