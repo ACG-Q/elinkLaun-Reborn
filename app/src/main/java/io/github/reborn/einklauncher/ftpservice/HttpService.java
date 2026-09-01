@@ -356,20 +356,6 @@ public class HttpService extends Service {
         arr.put(item);
       }
 
-      String[]虚拟包名 = {
-        "E-ink_Launcher.Lock",
-        "E-ink_Launcher.WiFi",
-        "E-ink_Launcher.HttpServer"
-      };
-      String[]虚拟名称 = {"OneKey Lock", "WiFi Control", "HTTP Server"};
-      for (int i = 0; i < 虚拟包名.length; i++) {
-        JSONObject item = new JSONObject();
-        item.put("name", 虚拟名称[i]);
-        item.put("packageName", 虚拟包名[i]);
-        item.put("isVirtual", true);
-        arr.put(item);
-      }
-
       json.put("items", arr);
       sendJsonResponse(os, json.toString());
     } catch (JSONException e) {
@@ -390,6 +376,8 @@ public class HttpService extends Service {
         icon = BitmapFactory.decodeResource(getResources(), R.drawable.wifi_on);
       } else if ("E-ink_Launcher.HttpServer".equals(pkg)) {
         icon = BitmapFactory.decodeResource(getResources(), R.drawable.http_server);
+      } else if ("E-ink_Launcher.WiFiOff".equals(pkg)) {
+        icon = BitmapFactory.decodeResource(getResources(), R.drawable.wifi_off);
       } else {
         Drawable d = getPackageManager().getApplicationIcon(pkg);
         icon = drawableToBitmap(d);
@@ -442,8 +430,8 @@ public class HttpService extends Service {
         arr.put(item);
       }
 
-      String[]虚拟包名 = {"E-ink_Launcher.Lock", "E-ink_Launcher.WiFi", "E-ink_Launcher.HttpServer"};
-      String[]虚拟名称 = {"OneKey Lock", "WiFi Control", "HTTP Server"};
+      String[]虚拟包名 = {"E-ink_Launcher.Lock", "E-ink_Launcher.WiFi", "E-ink_Launcher.WiFiOff", "E-ink_Launcher.HttpServer"};
+      String[]虚拟名称 = {"OneKey Lock", "WiFi Control", "WiFi Off", "HTTP Server"};
       for (int i = 0; i < 虚拟包名.length; i++) {
         JSONObject item = new JSONObject();
         item.put("name", 虚拟名称[i]);

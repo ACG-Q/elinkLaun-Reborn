@@ -165,3 +165,42 @@ tr:active{background:#f8f9fa}
 .grid.search-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 
 @media(max-width:380px){.grid{grid-template-columns:1fr}.icon-grid{grid-template-columns:1fr}.grid.search-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* Icon Generator */
+.igen-preview{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:24px;text-align:center;margin-bottom:12px}
+.igen-section{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:16px;margin-bottom:12px}
+.igen-section-title{font-size:14px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #f0f0f0}
+.igen-control{margin-bottom:0}
+.igen-input{width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:8px;font-size:18px;font-weight:600;text-align:center;letter-spacing:8px;outline:none;background:#fff;-webkit-appearance:none}
+.igen-input:focus{border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.15)}
+.igen-input::placeholder{color:#888;letter-spacing:2px;font-weight:400;font-size:16px}
+.igen-mode-tabs{display:flex;background:#fafbfc;border-radius:8px;padding:4px;border:1px solid #f0f0f0}
+.igen-mode-tab{flex:1;padding:10px 16px;border:none;border-radius:8px;background:transparent;font-size:14px;font-weight:500;color:#666;cursor:pointer;transition:all .15s;min-height:40px;outline:none}
+.igen-mode-tab:active{background:#f0f0f0}
+.igen-mode-tab-active{background:#fff;color:#1a73e8;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.igen-presets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.igen-preset{padding:10px 8px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;font-size:13px;font-weight:500;cursor:pointer;text-align:center;min-height:40px;transition:all .15s}
+.igen-preset:active{transform:scale(0.96)}
+.igen-preset-active{border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;font-weight:600}
+.igen-color-row{display:flex;align-items:center;gap:12px;padding:8px;background:#fafbfc;border-radius:8px;border:1px solid #f0f0f0}
+.igen-color-input{width:40px;height:40px;border:2px solid #e0e0e0;border-radius:8px;cursor:pointer;padding:3px;background:#fff;flex-shrink:0;-webkit-appearance:none}
+.igen-color-hex{font-size:14px;font-weight:600;font-family:monospace}
+.igen-color-label{font-size:12px;color:#888;margin-top:2px}
+.igen-toggle{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0}
+.igen-toggle input{opacity:0;width:0;height:0;position:absolute}
+.igen-toggle-track{position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:14px;transition:background .2s}
+.igen-toggle-track::before{content:'';position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s cubic-bezier(0.34,1.56,0.64,1)}
+.igen-toggle input:checked+.igen-toggle-track{background:#1a73e8}
+.igen-toggle input:checked+.igen-toggle-track::before{transform:translateX(20px)}
+.igen-chips{display:flex;gap:8px;flex-wrap:wrap}
+.igen-chip{padding:8px 14px;border-radius:20px;border:1.5px solid #e0e0e0;background:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;min-height:36px;display:inline-flex;align-items:center;justify-content:center}
+.igen-chip:active{transform:scale(0.96)}
+.igen-chip-active{border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;font-weight:600}
+.igen-range-row{display:flex;align-items:center;gap:12px}
+.igen-range-row input[type=range]{flex:1;min-width:0;-webkit-appearance:none;height:6px;background:#e0e0e0;border-radius:3px;outline:none}
+.igen-range-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#1a73e8;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);cursor:pointer}
+.igen-range-val{font-size:12px;font-weight:600;color:#888;min-width:40px;text-align:right;font-family:monospace}
+.igen-upload{border:2px dashed #d0d0d0;border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc;position:relative;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.igen-upload:active{border-color:#1a73e8;background:#e8f0fe}
+.igen-actions{position:fixed;bottom:56px;left:0;right:0;padding:12px 16px;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid #e0e0e0;box-shadow:0 -2px 12px rgba(0,0,0,0.06);z-index:99}
+.igen-actions-inner{display:flex;gap:10px;max-width:600px;margin:0 auto}

@@ -4,6 +4,7 @@ var App = (function() {
     'fm':      { render: FM.render,     title: 'Files' },
     'apk':     { render: APK.render,    title: 'APK Manager' },
     'icons':   { render: Icons.render,  title: 'Icon Manager' },
+    'icon-gen':{ render: IconGen.render, title: 'Icon Generator' },
     'settings':{ render: Settings.render, title: 'Settings' }
   };
 
