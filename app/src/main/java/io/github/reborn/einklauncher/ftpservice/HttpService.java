@@ -1,5 +1,7 @@
 package io.github.reborn.einklauncher.ftpservice;
 
+import io.github.reborn.einklauncher.R;
+
 import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -50,8 +52,19 @@ import java.net.URLDecoder;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import android.content.pm.ApplicationInfo;
+import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 
 /**
  * 轻量级 HTTP 文件服务器，替代 FTP，用于局域网内浏览器访问设备文件。
@@ -189,9 +202,9 @@ public class HttpService extends Service {
       if ("GET".equals(method)) {
         handleGet(path, uri, rootDir, os);
       } else if ("POST".equals(method)) {
-        handlePost(path, rootDir, is, contentLengthStr, contentType, os);
+        handlePost(path, uri, rootDir, is, contentLengthStr, contentType, os);
       } else if ("DELETE".equals(method)) {
-        handleDelete(path, rootDir, os);
+        handleDelete(path, uri, rootDir, os);
       } else {
         sendResponse(os, 405, "Method Not Allowed", "text/plain", "405 Method Not Allowed");
       }
@@ -208,7 +221,8 @@ public class HttpService extends Service {
   private void handleGet(String path, String fullUri, File rootDir, OutputStream os) throws IOException {
     if ("/api/stats".equals(path)) { sendJsonStats(rootDir, os); return; }
     if ("/api/files".equals(path)) { sendJsonFiles(extractQueryParam(fullUri, "path"), rootDir, os); return; }
-    if ("/api/apks".equals(path)) { sendJsonApks(rootDir, os); return; }
+    if ("/api/apps".equals(path)) { sendJsonApps(os); return; }
+    if ("/api/app-icon".equals(path)) { sendJsonAppIcon(extractQueryParam(fullUri, "pkg"), os); return; }
     if ("/api/icons".equals(path)) { sendJsonIcons(os); return; }
     if ("/api/device".equals(path)) { sendJsonDevice(os); return; }
     if ("/api/battery".equals(path)) { sendJsonBattery(os); return; }
@@ -319,31 +333,38 @@ public class HttpService extends Service {
     }
   }
 
-  private void sendJsonApks(File rootDir, OutputStream os) throws IOException {
+  private void sendJsonApps(OutputStream os) throws IOException {
     try {
-      java.util.List<File> apkFiles = new java.util.ArrayList<>();
-      String[] dirs = { rootDir.getAbsolutePath() + "/Download", rootDir.getAbsolutePath() + "/Downloads", "/sdcard/Download" };
-      for (String d : dirs) {
-        File dir = new File(d);
-        if (!dir.exists() || !dir.isDirectory()) continue;
-        File[] found = dir.listFiles();
-        if (found != null) {
-          for (File f : found) {
-            if (f.getName().toLowerCase().endsWith(".apk") && f.isFile()) apkFiles.add(f);
-          }
-        }
-      }
+      Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+      mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+      List<ResolveInfo> list = getPackageManager().queryIntentActivities(mainIntent, 0);
+
       JSONObject json = new JSONObject();
       JSONArray arr = new JSONArray();
-      for (File f : apkFiles) {
+
+      for (ResolveInfo ri : list) {
+        if ("io.github.reborn.einklauncher.Launcher".equals(ri.activityInfo.name)) continue;
         JSONObject item = new JSONObject();
-        item.put("name", f.getName());
-        item.put("path", f.getAbsolutePath());
-        item.put("parent", f.getParent());
-        item.put("size", f.length());
-        item.put("sizeHuman", formatSize(f.length()));
+        item.put("name", ri.loadLabel(getPackageManager()).toString());
+        item.put("packageName", ri.activityInfo.packageName);
+        item.put("isSystem", (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
         arr.put(item);
       }
+
+      String[]虚拟包名 = {
+        "E-ink_Launcher.Lock",
+        "E-ink_Launcher.WiFi",
+        "E-ink_Launcher.HttpServer"
+      };
+      String[]虚拟名称 = {"OneKey Lock", "WiFi Control", "HTTP Server"};
+      for (int i = 0; i < 虚拟包名.length; i++) {
+        JSONObject item = new JSONObject();
+        item.put("name", 虚拟名称[i]);
+        item.put("packageName", 虚拟包名[i]);
+        item.put("isVirtual", true);
+        arr.put(item);
+      }
+
       json.put("items", arr);
       sendJsonResponse(os, json.toString());
     } catch (JSONException e) {
@@ -351,36 +372,73 @@ public class HttpService extends Service {
     }
   }
 
+  private void sendJsonAppIcon(String pkg, OutputStream os) throws IOException {
+    if (pkg == null || pkg.isEmpty()) {
+      try { sendJsonResponse(os, new JSONObject().put("error", "Missing pkg").toString()); } catch (JSONException ignored) {}
+      return;
+    }
+    try {
+      Bitmap icon = null;
+      if ("E-ink_Launcher.Lock".equals(pkg)) {
+        icon = BitmapFactory.decodeResource(getResources(), R.drawable.ic_onekeylock);
+      } else if ("E-ink_Launcher.WiFi".equals(pkg)) {
+        icon = BitmapFactory.decodeResource(getResources(), R.drawable.wifi_on);
+      } else if ("E-ink_Launcher.HttpServer".equals(pkg)) {
+        icon = BitmapFactory.decodeResource(getResources(), R.drawable.http_server);
+      } else {
+        Drawable d = getPackageManager().getApplicationIcon(pkg);
+        icon = drawableToBitmap(d);
+      }
+      if (icon != null) {
+        Bitmap scaled = Bitmap.createScaledBitmap(icon, 96, 96, true);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        scaled.compress(Bitmap.CompressFormat.PNG, 100, baos);
+        String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+        JSONObject resp = new JSONObject();
+        resp.put("icon", "data:image/png;base64," + b64);
+        sendJsonResponse(os, resp.toString());
+      } else {
+        sendJsonResponse(os, new JSONObject().put("icon", "").toString());
+      }
+    } catch (Exception e) {
+      try { sendJsonResponse(os, new JSONObject().put("icon", "").toString()); } catch (JSONException ignored) {}
+    }
+  }
+
   private void sendJsonIcons(OutputStream os) throws IOException {
     try {
-      SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-      JSONObject json = new JSONObject();
-      JSONObject current = new JSONObject();
-      String lockIcon = prefs.getString("icon_lock", "lock");
-      String wifiIcon = prefs.getString("icon_wifi", "wifi");
-      String httpIcon = prefs.getString("icon_http", "phone");
-      current.put("lock", iconInfo("lock", lockIcon));
-      current.put("wifi", iconInfo("wifi", wifiIcon));
-      current.put("http", iconInfo("http", httpIcon));
-      json.put("currentIcons", current);
-      JSONArray arr = new JSONArray();
-      String[] defaults = {"lock", "wifi", "http", "settings", "folder", "file", "image", "music", "video", "phone"};
-      for (String name : defaults) {
-        arr.put(new JSONObject().put("name", name + ".png").put("type", "default"));
-      }
+      Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+      mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+      List<ResolveInfo> list = getPackageManager().queryIntentActivities(mainIntent, 0);
+
       File iconDir = new File(getExternalCacheDir(), "custom_icons");
-      if (iconDir.exists() && iconDir.isDirectory()) {
-        File[] custom = iconDir.listFiles();
-        if (custom != null) {
-          for (File f : custom) {
-            String n = f.getName();
-            if (n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".webp")) {
-              arr.put(new JSONObject().put("name", n).put("type", "custom").put("url", "/custom_icons/" + n));
-            }
-          }
-        }
+      if (!iconDir.exists()) iconDir.mkdirs();
+
+      JSONObject json = new JSONObject();
+      JSONArray arr = new JSONArray();
+
+      for (ResolveInfo ri : list) {
+        if ("io.github.reborn.einklauncher.Launcher".equals(ri.activityInfo.name)) continue;
+        String pkg = ri.activityInfo.packageName;
+        JSONObject item = new JSONObject();
+        item.put("name", ri.loadLabel(getPackageManager()).toString());
+        item.put("packageName", pkg);
+        item.put("hasCustomIcon", new File(iconDir, pkg + ".png").exists());
+        arr.put(item);
       }
-      json.put("availableIcons", arr);
+
+      String[]虚拟包名 = {"E-ink_Launcher.Lock", "E-ink_Launcher.WiFi", "E-ink_Launcher.HttpServer"};
+      String[]虚拟名称 = {"OneKey Lock", "WiFi Control", "HTTP Server"};
+      for (int i = 0; i < 虚拟包名.length; i++) {
+        JSONObject item = new JSONObject();
+        item.put("name", 虚拟名称[i]);
+        item.put("packageName", 虚拟包名[i]);
+        item.put("isVirtual", true);
+        item.put("hasCustomIcon", new File(iconDir, 虚拟包名[i] + ".png").exists());
+        arr.put(item);
+      }
+
+      json.put("items", arr);
       sendJsonResponse(os, json.toString());
     } catch (JSONException e) {
       throw new IOException("JSON error", e);
@@ -700,6 +758,80 @@ public class HttpService extends Service {
     }
   }
 
+  private void handleIconReplace(String fullUri, InputStream is,
+      String contentLengthStr, String contentType, OutputStream os) throws IOException {
+    try {
+      String pkg = extractQueryParam(fullUri, "pkg");
+      if (pkg == null || pkg.isEmpty()) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+        return;
+      }
+      if (contentType == null || !contentType.contains("multipart/form-data")) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Expected multipart/form-data").toString());
+        return;
+      }
+      int contentLength = 0;
+      if (contentLengthStr != null) {
+        try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
+      }
+      if (contentLength <= 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing Content-Length").toString());
+        return;
+      }
+      String boundary = extractBoundary(contentType);
+      if (boundary == null) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
+        return;
+      }
+      byte[] allBytes = readFully(is, contentLength);
+      String delimiter = "--" + boundary;
+      int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
+      if (pos < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No boundary found").toString());
+        return;
+      }
+      pos += delimiter.length();
+      if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') pos += 2;
+      else if (pos + 1 <= allBytes.length && allBytes[pos] == '\n') pos += 1;
+
+      int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
+      if (headerEnd < 0) headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
+      if (headerEnd < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No header end").toString());
+        return;
+      }
+      int dataStart = (allBytes[headerEnd] == '\r') ? headerEnd + 4 : headerEnd + 2;
+      int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), dataStart);
+      if (dataEnd < 0) dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), dataStart);
+      if (dataEnd < 0) {
+        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No data end").toString());
+        return;
+      }
+      byte[] fileData = new byte[dataEnd - dataStart];
+      System.arraycopy(allBytes, dataStart, fileData, 0, fileData.length);
+
+      File iconDir = new File(getExternalCacheDir(), "custom_icons");
+      if (!iconDir.exists()) iconDir.mkdirs();
+      File outFile = new File(iconDir, pkg + ".png");
+      FileOutputStream fos = new FileOutputStream(outFile);
+      fos.write(fileData);
+      fos.close();
+
+      File documentsIconDir = new File(
+          Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+          "E-Ink Launcher/icon");
+      if (!documentsIconDir.exists()) documentsIconDir.mkdirs();
+      File documentsIcon = new File(documentsIconDir, pkg + ".png");
+      FileOutputStream fos2 = new FileOutputStream(documentsIcon);
+      fos2.write(fileData);
+      fos2.close();
+
+      sendJsonResponse(os, new JSONObject().put("success", true).toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
+    }
+  }
+
   private void sendJsonResponse(OutputStream os, String json) throws IOException {
     byte[] body = json.getBytes("UTF-8");
     String header = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=UTF-8\r\n"
@@ -751,11 +883,11 @@ public class HttpService extends Service {
 
   // ===== POST (Upload) =====
 
-  private void handlePost(String path, File rootDir, InputStream is,
+  private void handlePost(String path, String fullUri, File rootDir, InputStream is,
       String contentLengthStr, String contentType, OutputStream os) throws IOException {
     if (path.startsWith("/api/upload")) {
       try {
-        String targetPath = extractQueryParam(path, "path");
+        String targetPath = extractQueryParam(fullUri, "path");
         File targetDir = (targetPath != null && !targetPath.isEmpty()) ? new File(targetPath) : rootDir;
         if (!targetDir.exists() || !targetDir.isDirectory()) {
           sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Target is not a directory").toString());
@@ -780,6 +912,7 @@ public class HttpService extends Service {
         }
         byte[] allBytes = readFully(is, contentLength);
         int uploaded = 0;
+        String lastFilePath = null;
         String delimiter = "--" + boundary;
         int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
         while (pos >= 0) {
@@ -817,11 +950,16 @@ public class HttpService extends Service {
           fos.write(fileData);
           fos.close();
           uploaded++;
+          lastFilePath = outFile.getAbsolutePath();
           int nextBoundary = findBytes(allBytes, delimiter.getBytes("UTF-8"), dataEnd);
           if (nextBoundary < 0) break;
           pos = nextBoundary;
         }
-        sendJsonResponse(os, new JSONObject().put("success", true).put("uploaded", uploaded).toString());
+        JSONObject resp = new JSONObject();
+        resp.put("success", true);
+        resp.put("uploaded", uploaded);
+        if (lastFilePath != null) resp.put("path", lastFilePath);
+        sendJsonResponse(os, resp.toString());
       } catch (JSONException e) {
         throw new IOException("JSON error", e);
       }
@@ -830,8 +968,8 @@ public class HttpService extends Service {
 
     if (path.startsWith("/api/volume")) {
       try {
-        String streamName = extractQueryParam(path, "stream");
-        String valueStr = extractQueryParam(path, "value");
+        String streamName = extractQueryParam(fullUri, "stream");
+        String valueStr = extractQueryParam(fullUri, "value");
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         if (am == null || streamName == null || valueStr == null) {
           sendJsonResponse(os, new JSONObject().put("success", false).toString());
@@ -855,12 +993,12 @@ public class HttpService extends Service {
     }
     if (path.startsWith("/api/brightness")) {
       try {
-        String valueStr = extractQueryParam(path, "value");
-        if (valueStr == null) {
+        String brightnessStr = extractQueryParam(fullUri, "value");
+        if (brightnessStr == null) {
           sendJsonResponse(os, new JSONObject().put("success", false).toString());
           return;
         }
-        int value = Integer.parseInt(valueStr);
+        int value = Integer.parseInt(brightnessStr);
         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, value);
         sendJsonResponse(os, new JSONObject().put("success", true).toString());
       } catch (Exception e) {
@@ -870,7 +1008,7 @@ public class HttpService extends Service {
     }
     if (path.startsWith("/api/rotation")) {
       try {
-        String enabledStr = extractQueryParam(path, "enabled");
+        String enabledStr = extractQueryParam(fullUri, "enabled");
         if (enabledStr == null) {
           sendJsonResponse(os, new JSONObject().put("success", false).toString());
           return;
@@ -889,8 +1027,8 @@ public class HttpService extends Service {
     }
     if (path.startsWith("/api/icons/assign")) {
       try {
-        String slot = extractQueryParam(path, "slot");
-        String icon = extractQueryParam(path, "icon");
+        String slot = extractQueryParam(fullUri, "slot");
+        String icon = extractQueryParam(fullUri, "icon");
         if (slot == null || icon == null) {
           sendJsonResponse(os, new JSONObject().put("success", false).toString());
           return;
@@ -903,9 +1041,13 @@ public class HttpService extends Service {
       }
       return;
     }
+    if (path.startsWith("/api/icons/replace")) {
+      handleIconReplace(fullUri, is, contentLengthStr, contentType, os);
+      return;
+    }
     if (path.startsWith("/api/open-settings")) {
       try {
-        String action = extractQueryParam(path, "action");
+        String action = extractQueryParam(fullUri, "action");
         if (action != null && !action.isEmpty()) {
           Intent intent = new Intent(action);
           intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -913,6 +1055,71 @@ public class HttpService extends Service {
           sendJsonResponse(os, new JSONObject().put("success", true).toString());
         } else {
           sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing action").toString());
+        }
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/app-install")) {
+      try {
+        String targetPath = extractQueryParam(fullUri, "path");
+        if (targetPath == null || targetPath.isEmpty()) {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing path").toString());
+          return;
+        }
+        File apkFile = new File(targetPath);
+        if (!apkFile.exists() || !apkFile.getName().toLowerCase().endsWith(".apk")) {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Invalid APK file").toString());
+          return;
+        }
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          intent.setDataAndType(
+              androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".fileProvider", apkFile),
+              "application/vnd.android.package-archive");
+          intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+          intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive");
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/app-uninstall")) {
+      try {
+        String pkg = extractQueryParam(fullUri, "pkg");
+        if (pkg == null || pkg.isEmpty()) {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+          return;
+        }
+        Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+      } catch (Exception e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/app-open")) {
+      try {
+        String pkg = extractQueryParam(fullUri, "pkg");
+        if (pkg == null || pkg.isEmpty()) {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+          return;
+        }
+        Intent launchIntent = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launchIntent != null) {
+          launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+          startActivity(launchIntent);
+          sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        } else {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No launch intent").toString());
         }
       } catch (Exception e) {
         try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
@@ -1008,10 +1215,10 @@ public class HttpService extends Service {
 
   // ===== DELETE =====
 
-  private void handleDelete(String path, File rootDir, OutputStream os) throws IOException {
+  private void handleDelete(String path, String fullUri, File rootDir, OutputStream os) throws IOException {
     if (path.startsWith("/api/files")) {
       try {
-        String filePath = extractQueryParam(path, "path");
+        String filePath = extractQueryParam(fullUri, "path");
         if (filePath == null || filePath.isEmpty()) {
           sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing path").toString());
           return;
@@ -1026,7 +1233,7 @@ public class HttpService extends Service {
     }
     if (path.startsWith("/api/icons/custom")) {
       try {
-        String name = extractQueryParam(path, "name");
+        String name = extractQueryParam(fullUri, "name");
         if (name == null || name.isEmpty()) {
           sendJsonResponse(os, new JSONObject().put("success", false).toString());
           return;
@@ -1038,6 +1245,26 @@ public class HttpService extends Service {
         File iconFile = new File(getExternalCacheDir(), "custom_icons/" + name);
         boolean deleted = iconFile.exists() && iconFile.delete();
         sendJsonResponse(os, new JSONObject().put("success", deleted).toString());
+      } catch (JSONException e) {
+        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+      }
+      return;
+    }
+    if (path.startsWith("/api/icons/replace")) {
+      try {
+        String pkg = extractQueryParam(fullUri, "pkg");
+        if (pkg == null || pkg.isEmpty()) {
+          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+          return;
+        }
+        File iconDir = new File(getExternalCacheDir(), "custom_icons");
+        File iconFile = new File(iconDir, pkg + ".png");
+        boolean deleted = iconFile.exists() && iconFile.delete();
+        File documentsIcon = new File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            "E-Ink Launcher/icon/" + pkg + ".png");
+        if (documentsIcon.exists()) documentsIcon.delete();
+        sendJsonResponse(os, new JSONObject().put("success", true).put("deleted", deleted).toString());
       } catch (JSONException e) {
         try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
       }
@@ -1157,6 +1384,21 @@ public class HttpService extends Service {
     if (s == null) return "";
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         .replace("\"", "&quot;").replace("'", "&#39;");
+  }
+
+  private Bitmap drawableToBitmap(Drawable drawable) {
+    if (drawable instanceof BitmapDrawable) {
+      return ((BitmapDrawable) drawable).getBitmap();
+    }
+    int w = drawable.getIntrinsicWidth();
+    int h = drawable.getIntrinsicHeight();
+    if (w <= 0) w = 96;
+    if (h <= 0) h = 96;
+    Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+    android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+    drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+    drawable.draw(canvas);
+    return bmp;
   }
 
   private String formatSize(long bytes) {

@@ -1,6 +1,6 @@
 var FM = {
   render: function(el, qp) {
-    var currentPath = qp.path || '/';
+    var currentPath = qp.path || '/sdcard';
 
     API.get('/api/files?path=' + encodeURIComponent(currentPath)).then(function(data) {
       var items = data.items || [];
