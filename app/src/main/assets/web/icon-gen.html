@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>圆角图片生成器</title>
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --surface-2: #fafbfc;
+      --border: #e8eaed;
+      --border-light: #f1f3f4;
+      --text: #202124;
+      --text-2: #5f6368;
+      --text-3: #80868b;
+      --primary: #1a73e8;
+      --primary-light: #e8f0fe;
+      --primary-dark: #1557b0;
+      --success: #1e8e3e;
+      --radius-xs: 6px;
+      --radius-sm: 10px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+      --font-mono: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Layout */
+    .app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      padding-bottom: 120px;
+    }
+
+    .app-header {
+      text-align: center;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .back-btn {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .back-btn:hover {
+      background: var(--surface-2);
+      border-color: var(--text-3);
+      transform: translateY(-50%) scale(1.05);
+    }
+
+    .back-btn:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2;
+    }
+
+    .app-header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    .app-header p {
+      font-size: 14px;
+      color: var(--text-2);
+    }
+
+    /* Preview Panel */
+    .preview-panel {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 32px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .preview-panel::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 120px;
+      background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+      pointer-events: none;
+    }
+
+    .preview-label {
+      position: relative;
+      z-index: 1;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    #preview {
+      position: relative;
+      z-index: 1;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      image-rendering: -webkit-optimize-contrast;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #preview:hover {
+      transform: scale(1.02);
+    }
+
+    /* Section Cards */
+    .section {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-xs);
+      transition: box-shadow 0.2s;
+    }
+
+    .section:hover {
+      box-shadow: var(--shadow-sm);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .section-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .section-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    /* Form Controls */
+    .control {
+      margin-bottom: 16px;
+    }
+
+    .control:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-2);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .control-value {
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-light);
+    }
+
+    /* Text Input */
+    .input-text {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 8px;
+      outline: none;
+      transition: all 0.15s;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .input-text:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .input-text::placeholder {
+      color: var(--text-3);
+      letter-spacing: 2px;
+      font-weight: 400;
+      font-size: 16px;
+    }
+
+    /* Range Slider */
+    .range-track {
+      position: relative;
+      padding: 8px 0;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 3px solid var(--surface);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.2);
+      box-shadow: 0 3px 10px rgba(26,115,232,0.3);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 3px solid var(--surface);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      cursor: pointer;
+    }
+
+    /* Preset Buttons Grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .preset-btn {
+      position: relative;
+      padding: 12px 8px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--text-3);
+      transform: translateY(-1px);
+    }
+
+    .preset-btn:active {
+      transform: scale(0.97);
+    }
+
+    .preset-btn.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+
+    /* Color Picker Row */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-light);
+    }
+
+    .color-input {
+      width: 48px;
+      height: 48px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      padding: 3px;
+      background: var(--surface);
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .color-input:hover {
+      border-color: var(--text-3);
+      transform: scale(1.05);
+    }
+
+    .color-input::-webkit-color-swatch-wrapper { padding: 0; }
+    .color-input::-webkit-color-swatch { border: none; border-radius: 6px; }
+
+    .color-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .color-hex {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      font-family: var(--font-mono);
+    }
+
+    .color-label {
+      font-size: 12px;
+      color: var(--text-2);
+      margin-top: 2px;
+    }
+
+    /* Toggle Switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .toggle-track {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--border);
+      border-radius: 14px;
+      transition: background 0.2s;
+    }
+
+    .toggle-track::before {
+      content: "";
+      position: absolute;
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background: var(--surface);
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: var(--primary);
+    }
+
+    .toggle input:checked + .toggle-track::before {
+      transform: translateX(20px);
+    }
+
+    .toggle input:focus-visible + .toggle-track {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Chip Group */
+    .chip-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 10px 16px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chip:hover {
+      border-color: var(--text-3);
+      background: var(--surface-2);
+    }
+
+    .chip:active {
+      transform: scale(0.96);
+    }
+
+    .chip.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Mode Tabs */
+    .mode-tabs {
+      display: flex;
+      gap: 0;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      border: 1px solid var(--border-light);
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-2);
+      cursor: pointer;
+      transition: all 0.15s;
+      min-height: 44px;
+      outline: none;
+    }
+
+    .mode-tab:hover {
+      color: var(--text);
+    }
+
+    .mode-tab.active {
+      background: var(--surface);
+      color: var(--primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .mode-tab:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+
+    /* Upload Area */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface-2);
+      position: relative;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .upload-area.drag-over {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      transform: scale(1.01);
+      box-shadow: 0 0 0 3px rgba(26,115,232,0.1);
+    }
+
+    .upload-area.has-image {
+      border-style: solid;
+      border-color: var(--border);
+      padding: 0;
+      overflow: hidden;
+      min-height: auto;
+    }
+
+    .upload-icon {
+      width: 40px;
+      height: 40px;
+      color: var(--text-3);
+      transition: all 0.2s;
+    }
+
+    .upload-area:hover .upload-icon {
+      color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .upload-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-2);
+    }
+
+    .upload-hint {
+      font-size: 12px;
+      color: var(--text-3);
+    }
+
+    .upload-preview {
+      width: 100%;
+      display: block;
+      image-rendering: -webkit-optimize-contrast;
+    }
+
+    .upload-clear {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      transition: all 0.15s;
+      backdrop-filter: blur(4px);
+    }
+
+    .upload-clear:hover {
+      background: rgba(0,0,0,0.8);
+      transform: scale(1.1);
+    }
+
+    /* Floating Action Bar */
+    .action-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 20px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+      z-index: 100;
+    }
+
+    .action-bar-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      min-height: 48px;
+      outline: none;
+      text-decoration: none;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(26,115,232,0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      box-shadow: 0 4px 12px rgba(26,115,232,0.35);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.97);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 2px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-2);
+      border-color: var(--text-3);
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--text);
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 999;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .app {
+        padding: 16px;
+        padding-bottom: 120px;
+      }
+
+      .preview-panel {
+        padding: 24px 16px;
+      }
+
+      .preset-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .section {
+        padding: 16px;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .app {
+        padding: 32px;
+      }
+
+      .preview-panel {
+        padding: 48px;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-header">
+      <button class="back-btn" onclick="history.back()" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      </button>
+      <h1>圆角图片生成器</h1>
+      <p>为墨水屏应用生成高清圆角图标</p>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-panel">
+      <div class="preview-label">实时预览</div>
+      <canvas id="preview" width="256" height="256" role="img" aria-label="生成的圆角图片预览"></canvas>
+    </div>
+
+    <!-- Text/Image Section -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+        </div>
+        <div class="section-title">图标内容</div>
+      </div>
+
+      <div class="control" style="margin-bottom:12px">
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-mode="text">文字</button>
+          <button class="mode-tab" data-mode="image">图片</button>
+        </div>
+      </div>
+
+      <div class="control" id="textMode">
+        <input type="text" class="input-text" id="text" value="设置" maxlength="2" placeholder="输入 1~2 个字" aria-label="图标文字">
+      </div>
+
+      <div class="control" id="imageMode" style="display:none">
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="imageInput" accept="image/*" style="display:none">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="upload-text">点击或拖拽上传图片</div>
+          <div class="upload-hint" id="uploadHint">支持 PNG / JPG / WebP</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Section -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12a10 10 0 0 0 5.012 8.662"/></svg>
+        </div>
+        <div class="section-title">配色方案</div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">预设配色</div>
+        <div class="preset-grid" id="colorScheme">
+          <button class="preset-btn active" data-bg="#ffffff" data-fg="#1a1a1a">白底黑字</button>
+          <button class="preset-btn" data-bg="#1a1a1a" data-fg="#ffffff">黑底白字</button>
+          <button class="preset-btn" data-bg="#1a73e8" data-fg="#ffffff">蓝底白字</button>
+          <button class="preset-btn" data-bg="#1e8e3e" data-fg="#ffffff">绿底白字</button>
+          <button class="preset-btn" data-bg="#d93025" data-fg="#ffffff">红底白字</button>
+          <button class="preset-btn" data-bg="#f9ab00" data-fg="#1a1a1a">黄底黑字</button>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">自定义颜色</div>
+        <div class="color-row">
+          <input type="color" class="color-input" id="bgColor" value="#ffffff" aria-label="背景颜色">
+          <div class="color-info">
+            <div class="color-hex" id="bgHex">#FFFFFF</div>
+            <div class="color-label">背景色</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="color-row">
+          <input type="color" class="color-input" id="fgColor" value="#1a1a1a" aria-label="文字颜色">
+          <div class="color-info">
+            <div class="color-hex" id="fgHex">#1A1A1A</div>
+            <div class="color-label">文字色</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Border Section -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </div>
+        <div class="section-title">边框</div>
+      </div>
+
+      <div class="control">
+        <div class="toggle-row">
+          <span class="toggle-label">显示边框（跟随文字色）</span>
+          <label class="toggle">
+            <input type="checkbox" id="borderEnabled" checked aria-label="显示边框">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">
+          <span>边框宽度</span>
+          <span class="control-value"><span id="borderWidthVal">3</span> px</span>
+        </div>
+        <div class="range-track">
+          <input type="range" id="borderWidth" min="1" max="12" step="1" value="3" aria-label="边框宽度">
+        </div>
+      </div>
+    </div>
+
+    <!-- Font Section -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </div>
+        <div class="section-title">字体</div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">字体风格</div>
+        <div class="chip-group" id="fontList">
+          <button class="chip active" data-font="system-ui">默认</button>
+          <button class="chip" data-font="serif">宋体</button>
+          <button class="chip" data-font="sans-serif">黑体</button>
+          <button class="chip" data-font="cursive">楷体</button>
+          <button class="chip" data-font="monospace">等宽</button>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">字体粗细</div>
+        <div class="preset-grid" id="fontWeight">
+          <button class="preset-btn" data-weight="400">Regular</button>
+          <button class="preset-btn active" data-weight="700">Bold</button>
+          <button class="preset-btn" data-weight="900">Black</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Size Section -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="section-title">尺寸与样式</div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">
+          <span>图片尺寸</span>
+          <span class="control-value"><span id="sizeVal">256</span> px</span>
+        </div>
+        <div class="range-track">
+          <input type="range" id="size" min="64" max="1024" step="1" value="256" aria-label="图片尺寸">
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">
+          <span>圆角半径</span>
+          <span class="control-value"><span id="radiusVal">32</span> px</span>
+        </div>
+        <div class="range-track">
+          <input type="range" id="radius" min="0" max="128" step="1" value="32" aria-label="圆角半径">
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">
+          <span>字号</span>
+          <span class="control-value"><span id="fontSizeVal">100</span> %</span>
+        </div>
+        <div class="range-track">
+          <input type="range" id="fontSize" min="30" max="200" step="1" value="100" aria-label="字号百分比">
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-label">
+          <span>字间距</span>
+          <span class="control-value"><span id="letterSpacingVal">0</span> px</span>
+        </div>
+        <div class="range-track">
+          <input type="range" id="letterSpacing" min="-10" max="30" step="1" value="0" aria-label="字间距">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Action Bar -->
+  <div class="action-bar">
+    <div class="action-bar-inner">
+      <button class="btn btn-secondary" onclick="copyClipboard()" aria-label="复制到剪贴板">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span>复制</span>
+      </button>
+      <button class="btn btn-primary" onclick="download()" aria-label="下载 PNG 图片">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>下载 PNG</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    var canvas = document.getElementById('preview');
+    var ctx = canvas.getContext('2d');
+
+    var state = {
+      text: '设置',
+      bg: '#ffffff',
+      fg: '#1a1a1a',
+      font: 'system-ui',
+      weight: '700',
+      size: 256,
+      radius: 32,
+      fontSize: 100,
+      letterSpacing: 0,
+      borderEnabled: true,
+      borderWidth: 3,
+      mode: 'text',
+      image: null
+    };
+
+    function roundedRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function draw() {
+      var s = state.size;
+      canvas.width = s;
+      canvas.height = s;
+      var display = Math.min(s, 256);
+      canvas.style.width = display + 'px';
+      canvas.style.height = display + 'px';
+
+      var r = Math.min(state.radius, s / 2);
+      ctx.clearRect(0, 0, s, s);
+
+      roundedRect(0, 0, s, s, r);
+      ctx.fillStyle = state.bg;
+      ctx.fill();
+
+      if (state.borderEnabled && state.borderWidth > 0) {
+        var bw = state.borderWidth;
+        ctx.save();
+        roundedRect(bw / 2, bw / 2, s - bw, s - bw, Math.max(0, r - bw / 2));
+        ctx.strokeStyle = state.fg;
+        ctx.lineWidth = bw;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      var text = state.text;
+      if (state.mode === 'image' && state.image) {
+        var img = state.image;
+        var scale = Math.min(s / img.width, s / img.height);
+        var w = img.width * scale;
+        var h = img.height * scale;
+        ctx.drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
+        return;
+      }
+
+      if (!text) return;
+
+      var charCount = text.length;
+      var baseFontSize = s * 0.42 * (state.fontSize / 100);
+      var fs = charCount > 1 ? baseFontSize * 0.85 : baseFontSize;
+
+      ctx.fillStyle = state.fg;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = state.weight + ' ' + fs + 'px ' + state.font;
+
+      var spacing = parseInt(state.letterSpacing) || 0;
+      if (charCount === 1) {
+        ctx.fillText(text, s / 2, s / 2);
+      } else {
+        var chars = text.split('');
+        var charWidths = [];
+        var totalWidth = 0;
+        chars.forEach(function(ch) {
+          var w = ctx.measureText(ch).width;
+          charWidths.push(w);
+          totalWidth += w;
+        });
+        totalWidth += spacing * (charCount - 1);
+        var x = (s - totalWidth) / 2;
+        chars.forEach(function(ch, i) {
+          var w = charWidths[i];
+          ctx.fillText(ch, x + w / 2, s / 2);
+          x += w + spacing;
+        });
+      }
+    }
+
+    function download() {
+      var name = state.mode === 'image' && state.image ? 'image' : (state.text || 'icon');
+      var link = document.createElement('a');
+      link.download = name + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('已保存到下载目录');
+    }
+
+    function copyClipboard() {
+      canvas.toBlob(function(blob) {
+        if (navigator.clipboard && navigator.clipboard.write) {
+          var item = new ClipboardItem({'image/png': blob});
+          navigator.clipboard.write([item]).then(function() {
+            showToast('已复制到剪贴板');
+          }).catch(function() {
+            showToast('复制失败，请重试');
+          });
+        } else {
+          showToast('当前浏览器不支持复制');
+        }
+      });
+    }
+
+    function showToast(msg) {
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(function() { el.classList.remove('show'); }, 2500);
+    }
+
+    function updateHexDisplays() {
+      document.getElementById('bgHex').textContent = state.bg.toUpperCase();
+      document.getElementById('fgHex').textContent = state.fg.toUpperCase();
+    }
+
+    function clearSchemeActive() {
+      document.querySelectorAll('#colorScheme .preset-btn').forEach(function(b) { b.classList.remove('active'); });
+    }
+
+    // Text input
+    document.getElementById('text').addEventListener('input', function() {
+      state.text = this.value;
+      draw();
+    });
+
+    // Color pickers
+    document.getElementById('bgColor').addEventListener('input', function() {
+      state.bg = this.value;
+      updateHexDisplays();
+      clearSchemeActive();
+      draw();
+    });
+
+    document.getElementById('fgColor').addEventListener('input', function() {
+      state.fg = this.value;
+      updateHexDisplays();
+      clearSchemeActive();
+      draw();
+    });
+
+    // Border
+    document.getElementById('borderEnabled').addEventListener('change', function() {
+      state.borderEnabled = this.checked;
+      draw();
+    });
+
+    document.getElementById('borderWidth').addEventListener('input', function() {
+      state.borderWidth = parseInt(this.value);
+      document.getElementById('borderWidthVal').textContent = this.value;
+      draw();
+    });
+
+    // Size & Style
+    document.getElementById('size').addEventListener('input', function() {
+      state.size = parseInt(this.value);
+      document.getElementById('sizeVal').textContent = this.value;
+      var maxR = Math.floor(state.size / 2);
+      document.getElementById('radius').max = maxR;
+      if (state.radius > maxR) {
+        state.radius = maxR;
+        document.getElementById('radius').value = maxR;
+        document.getElementById('radiusVal').textContent = maxR;
+      }
+      draw();
+    });
+
+    document.getElementById('radius').addEventListener('input', function() {
+      state.radius = parseInt(this.value);
+      document.getElementById('radiusVal').textContent = this.value;
+      draw();
+    });
+
+    document.getElementById('fontSize').addEventListener('input', function() {
+      state.fontSize = parseInt(this.value);
+      document.getElementById('fontSizeVal').textContent = this.value;
+      draw();
+    });
+
+    document.getElementById('letterSpacing').addEventListener('input', function() {
+      state.letterSpacing = parseInt(this.value);
+      document.getElementById('letterSpacingVal').textContent = this.value;
+      draw();
+    });
+
+    // Color scheme presets
+    document.querySelectorAll('#colorScheme .preset-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('#colorScheme .preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        state.bg = this.getAttribute('data-bg');
+        state.fg = this.getAttribute('data-fg');
+        document.getElementById('bgColor').value = state.bg;
+        document.getElementById('fgColor').value = state.fg;
+        updateHexDisplays();
+        draw();
+      });
+    });
+
+    // Font family
+    document.querySelectorAll('#fontList .chip').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('#fontList .chip').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        state.font = this.getAttribute('data-font');
+        draw();
+      });
+    });
+
+    // Font weight
+    document.querySelectorAll('#fontWeight .preset-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('#fontWeight .preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        state.weight = this.getAttribute('data-weight');
+        draw();
+      });
+    });
+
+    /* Mode Tabs */
+    document.querySelectorAll('.mode-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.mode-tab').forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        state.mode = this.getAttribute('data-mode');
+        if (state.mode === 'text') {
+          document.getElementById('textMode').style.display = 'block';
+          document.getElementById('imageMode').style.display = 'none';
+        } else {
+          document.getElementById('textMode').style.display = 'none';
+          document.getElementById('imageMode').style.display = 'block';
+        }
+        draw();
+      });
+    });
+
+    /* Image Upload */
+    var uploadArea = document.getElementById('uploadArea');
+    var imageInput = document.getElementById('imageInput');
+
+    uploadArea.addEventListener('click', function(e) {
+      if (e.target.classList.contains('upload-clear')) return;
+      imageInput.click();
+    });
+
+    imageInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        loadImage(this.files[0]);
+      }
+    });
+
+    uploadArea.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+      this.classList.remove('drag-over');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        loadImage(e.dataTransfer.files[0]);
+      }
+    });
+
+    function loadImage(file) {
+      if (!file.type.startsWith('image/')) {
+        showToast('请上传图片文件');
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          state.image = img;
+          showImagePreview(e.target.result, file.name);
+          draw();
+          showToast('图片已加载');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function showImagePreview(src, name) {
+      uploadArea.classList.add('has-image');
+      uploadArea.innerHTML = '<img class="upload-preview" src="' + src + '" alt="预览"><button class="upload-clear" aria-label="移除图片">&times;</button>';
+      uploadHint.textContent = name + ' · ' + Math.round(state.image.width) + '×' + Math.round(state.image.height);
+
+      uploadArea.querySelector('.upload-clear').addEventListener('click', function(e) {
+        e.stopPropagation();
+        clearImage();
+      });
+    }
+
+    function clearImage() {
+      state.image = null;
+      imageInput.value = '';
+      uploadArea.classList.remove('has-image');
+      uploadArea.innerHTML = '<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><div class="upload-text">点击或拖拽上传图片</div><div class="upload-hint">支持 PNG / JPG / WebP</div>';
+      draw();
+      showToast('已移除图片');
+    }
+
+    updateHexDisplays();
+    draw();
+  </script>
+</body>
+</html>
