@@ -248,7 +248,7 @@ public class HttpService extends Service {
 
     if ("/".equals(path) || "/index.html".equals(path)) { sendAssetFile("index.html", os); return; }
     if ("/icon-gen.html".equals(path)) { sendAssetFile("icon-gen.html", os); return; }
-    if (path.startsWith("/css/") || path.startsWith("/js/")) { sendAssetFile(path.substring(1), os); return; }
+    if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/assets/")) { sendAssetFile(path.substring(1), os); return; }
 
     File file = new File(rootDir, path);
     if (!file.exists()) { sendResponse(os, 404, "Not Found", "text/html", buildErrorPage(404, "File Not Found")); return; }
@@ -260,7 +260,7 @@ public class HttpService extends Service {
 
   private void sendAssetFile(String assetPath, OutputStream os) throws IOException {
     try {
-      InputStream is = getAssets().open("web/" + assetPath);
+      InputStream is = getAssets().open(assetPath);
       String mime = getMimeType(assetPath);
       byte[] header = ("HTTP/1.1 200 OK\r\nContent-Type: " + mime + "\r\nConnection: close\r\n\r\n").getBytes("UTF-8");
       os.write(header);

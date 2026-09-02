@@ -56,6 +56,7 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   private TextView showCustomIcon;
   private TextView showWifiName;
   private Config config;
+  private Runnable pendingStorageAction;
 
   @SuppressWarnings("deprecation")
   @Override
@@ -114,7 +115,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     hideDivider.setText(config.isHideDivider() ? "显示分隔线" : "隐藏分隔线");
     showCustomIcon.getPaint().setStrikeThruText(config.isShowCustomIcon());
     showWifiName.getPaint().setStrikeThruText(config.isShowWifiName());
-    showWifiName.setText(config.isShowWifiName() ? "隐藏WiFi名字" : "显示WiFi名字");
     fontControl.setProgress((int) ((config.getFontSize() - 10) * 10));
   }
 
@@ -263,7 +263,6 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     boolean newValue = !config.isShowWifiName();
     config.setShowWifiName(newValue);
     showWifiName.getPaint().setStrikeThruText(newValue);
-    showWifiName.setText(newValue ? "隐藏WiFi名字" : "显示WiFi名字");
     listener.onShowWifiNameChanged(newValue);
     if (newValue && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 10002);
@@ -273,15 +272,26 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   }
 
   private void handleToggleCustomIcon() {
-    Utils.checkStoragePermission(getActivity(), new Runnable() {
+    Runnable toggleAction = new Runnable() {
       @Override
       public void run() {
         boolean newValue = !config.isShowCustomIcon();
         config.setShowCustomIcon(newValue);
+        showCustomIcon.getPaint().setStrikeThruText(newValue);
         listener.onShowCustomIconChanged(newValue);
         getActivity().onBackPressed();
       }
-    });
+    };
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+        && getActivity().checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+        == PackageManager.PERMISSION_DENIED) {
+      pendingStorageAction = toggleAction;
+      getActivity().requestPermissions(
+          new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
+              Manifest.permission.WRITE_EXTERNAL_STORAGE}, 10003);
+    } else {
+      toggleAction.run();
+    }
   }
 
   @Override
@@ -292,6 +302,14 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
         WifiControl.reloadWifiName();
       }
       getActivity().onBackPressed();
+    } else if (requestCode == 10003) {
+      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
+          && pendingStorageAction != null) {
+        pendingStorageAction.run();
+      } else {
+        getActivity().onBackPressed();
+      }
+      pendingStorageAction = null;
     }
   }
 

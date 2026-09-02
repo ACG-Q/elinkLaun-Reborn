@@ -24,6 +24,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Web Frontend
+        run: |
+          cd web
+          npm install
+          npx vite build
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -67,16 +78,14 @@ jobs:
         run: |
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
             echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> $GITHUB_OUTPUT
-            echo "apk_name=E-Ink-Launcher-release.apk" >> $GITHUB_OUTPUT
           else
             echo "apk_path=app/build/outputs/apk/release/app-release-unsigned.apk" >> $GITHUB_OUTPUT
-            echo "apk_name=E-Ink-Launcher-unsigned.apk" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.find-apk.outputs.apk_name }}
+          name: E-Ink-Launcher
           path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 30
 
