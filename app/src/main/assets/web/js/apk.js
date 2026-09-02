@@ -10,6 +10,10 @@ var APK = {
     html += '<div class="upload-area" id="apk-upload">';
     html += '<p>Click or drag APK file here</p>';
     html += '<input type="file" id="apk-file" accept=".apk" style="display:none">';
+    html += '<div class="upload-progress" id="uploadProgress" style="display:none">';
+    html += '<div class="upload-progress-bar" id="uploadProgressBar"></div>';
+    html += '<div class="upload-progress-text" id="uploadProgressText">0%</div>';
+    html += '</div>';
     html += '</div></div>';
     el.innerHTML = html;
 
@@ -82,18 +86,28 @@ var APK = {
   },
 
   installApk: function(file) {
-    showToast('Uploading ' + file.name + '...');
-    var fd = new FormData();
-    fd.append('file', file);
-    API.post('/api/upload?path=' + encodeURIComponent('/sdcard/Download'), fd).then(function(d) {
-      if (d.success) {
-        var path = d.path || '/sdcard/Download/' + file.name;
-        API.post('/api/app-install?path=' + encodeURIComponent(path), null).then(function(d2) {
-          showToast(d2.success ? 'Install started' : (d2.error || 'Failed'));
-        });
-      } else {
-        showToast('Upload failed: ' + (d.error || 'Unknown'));
+    var progressEl = document.getElementById('uploadProgress');
+    var progressBar = document.getElementById('uploadProgressBar');
+    var progressText = document.getElementById('uploadProgressText');
+    progressEl.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+    API.uploadChunked({
+      targetPath: '/sdcard/Download',
+      action: 'install',
+      file: file,
+      onProgress: function(pct) {
+        progressBar.style.width = pct + '%';
+        progressText.textContent = pct + '%';
       }
+    }).then(function(r) {
+      return API.post('/api/app-install?path=' + encodeURIComponent(r.path));
+    }).then(function(r2) {
+      showToast(r2.success ? 'Install started' : (r2.error || 'Failed'));
+    }).catch(function() {
+      showToast('Upload/install failed');
+    }).finally(function() {
+      progressEl.style.display = 'none';
     });
   }
 };

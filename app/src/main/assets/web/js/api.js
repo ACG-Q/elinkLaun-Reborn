@@ -2,8 +2,10 @@ var API = (function() {
   function get(url) {
     return fetch(url).then(function(r) { return r.json(); });
   }
-  function post(url, formData) {
-    return fetch(url, { method: 'POST', body: formData }).then(function(r) { return r.json(); });
+  function post(url, body, opts) {
+    var fetchOpts = { method: 'POST', body: body };
+    if (opts && opts.headers) fetchOpts.headers = opts.headers;
+    return fetch(url, fetchOpts).then(function(r) { return r.json(); });
   }
   function del(url) {
     return fetch(url, { method: 'DELETE' }).then(function(r) { return r.json(); });
@@ -13,7 +15,128 @@ var API = (function() {
     for (var i = 0; i < files.length; i++) fd.append('file', files[i]);
     return post('/api/upload?path=' + encodeURIComponent(path), fd);
   }
-  return { get: get, post: post, del: del, upload: upload };
+  function uploadChunked(options) {
+    var file = options.file;
+    var onProgress = options.onProgress;
+    var action = options.action || 'file';
+    var targetPath = options.targetPath || '';
+    var pkg = options.pkg || '';
+    var concurrency = options.concurrency || 3;
+    var maxRetries = options.maxRetries || 3;
+
+    return post('/api/upload/start', JSON.stringify({
+      filename: file.name,
+      size: file.size,
+      action: action,
+      targetPath: targetPath,
+      pkg: pkg
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    }).then(function(startResp) {
+      if (!startResp.success) throw new Error(startResp.error || 'Failed to start upload');
+      var sessionId = startResp.sessionId;
+      var totalChunks = startResp.totalChunks;
+      var chunkSize = startResp.chunkSize;
+      var confirmed = new Array(totalChunks).fill(false);
+      var completedCount = 0;
+
+      function getChunk(index) {
+        var start = index * chunkSize;
+        var end = Math.min(start + chunkSize, file.size);
+        return file.slice(start, end);
+      }
+
+      function uploadChunk(index, retries) {
+        return new Promise(function(resolve, reject) {
+          var blob = getChunk(index);
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/upload/chunk?sessionId=' + sessionId + '&chunkIndex=' + index);
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+          xhr.responseType = 'json';
+          xhr.onload = function() {
+            var resp = xhr.response;
+            if (resp && resp.success) {
+              confirmed[index] = true;
+              completedCount++;
+              if (onProgress) {
+                var pct = Math.round(completedCount / totalChunks * 100);
+                onProgress(pct);
+              }
+              resolve(resp);
+            } else {
+              reject(new Error(resp ? resp.error : 'Chunk upload failed'));
+            }
+          };
+          xhr.onerror = function() { reject(new Error('Network error')); };
+          xhr.send(blob);
+        });
+      }
+
+      function uploadChunkWithRetry(index) {
+        return new Promise(function(resolve, reject) {
+          var retries = 0;
+          function attempt() {
+            uploadChunk(index, retries).then(resolve).catch(function(err) {
+              retries++;
+              if (retries <= maxRetries) {
+                setTimeout(attempt, 1000 * Math.pow(2, retries - 1));
+              } else {
+                reject(err);
+              }
+            });
+          }
+          attempt();
+        });
+      }
+
+      function runQueue() {
+        var queue = [];
+        for (var i = 0; i < totalChunks; i++) {
+          if (!confirmed[i]) queue.push(i);
+        }
+        var active = 0;
+        var idx = 0;
+        var errors = [];
+        var total = queue.length;
+
+        return new Promise(function(resolve, reject) {
+          function next() {
+            while (active < concurrency && idx < queue.length) {
+              var chunkIdx = queue[idx++];
+              active++;
+              uploadChunkWithRetry(chunkIdx).then(function() {
+                active--;
+                if (errors.length > 0) return;
+                if (idx >= queue.length && active === 0) {
+                  resolve();
+                } else {
+                  next();
+                }
+              }).catch(function(err) {
+                active++;
+                errors.push(err);
+              });
+            }
+            if (errors.length > 0 && active === 0) {
+              reject(errors[0]);
+            }
+          }
+          next();
+        });
+      }
+
+      return runQueue().then(function() {
+        return post('/api/upload/complete?sessionId=' + sessionId);
+      }).then(function(completeResp) {
+        if (!completeResp.success) throw new Error(completeResp.error || 'Upload complete failed');
+        return completeResp;
+      });
+    });
+  }
+  function uploadStatus(sessionId) {
+    return get('/api/upload/status?sessionId=' + encodeURIComponent(sessionId));
+  }
+  return { get: get, post: post, del: del, upload: upload, uploadChunked: uploadChunked, uploadStatus: uploadStatus };
 })();
 
 function showToast(msg) {

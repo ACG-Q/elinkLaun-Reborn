@@ -33,6 +33,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.PushbackInputStream;
+import java.io.RandomAccessFile;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -54,6 +55,8 @@ import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -90,6 +93,11 @@ public class HttpService extends Service {
   private ServerSocket serverSocket;
   private ExecutorService threadPool;
   private volatile boolean running = false;
+
+  private static final int CHUNK_SIZE = 256 * 1024;
+  private static final ConcurrentHashMap<String, UploadSession> uploadSessions = new ConcurrentHashMap<>();
+  private static final long SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+  private static File uploadTempDir;
 
   public static int getDefaultPortFromPreferences(SharedPreferences prefs) {
     try {
@@ -696,145 +704,6 @@ public class HttpService extends Service {
     fis.close();
   }
 
-  private void handleIconUpload(String path, File rootDir, PushbackInputStream pis,
-      String contentLengthStr, String contentType, OutputStream os) throws IOException {
-    try {
-      if (contentType == null || !contentType.contains("multipart/form-data")) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Expected multipart/form-data").toString());
-        return;
-      }
-      int contentLength = 0;
-      if (contentLengthStr != null) {
-        try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
-      }
-      if (contentLength <= 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing Content-Length").toString());
-        return;
-      }
-      String boundary = extractBoundary(contentType);
-      if (boundary == null) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
-        return;
-      }
-      byte[] allBytes = readFully(pis, contentLength);
-      String delimiter = "--" + boundary;
-      int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
-      if (pos < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No boundary found").toString());
-        return;
-      }
-      pos += delimiter.length();
-      if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') pos += 2;
-      else if (pos + 1 <= allBytes.length && allBytes[pos] == '\n') pos += 1;
-      int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
-      if (headerEnd < 0) headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
-      if (headerEnd < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No header end").toString());
-        return;
-      }
-      String partHeader;
-      if (allBytes[headerEnd] == '\r') { partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8"); headerEnd += 4; }
-      else { partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8"); headerEnd += 2; }
-      String fileName = extractFileName(partHeader);
-      if (fileName == null) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No filename").toString());
-        return;
-      }
-      fileName = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-      int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), headerEnd);
-      if (dataEnd < 0) dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), headerEnd);
-      if (dataEnd < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No data end").toString());
-        return;
-      }
-      byte[] fileData = new byte[dataEnd - headerEnd];
-      System.arraycopy(allBytes, headerEnd, fileData, 0, fileData.length);
-      File iconDir = new File(getExternalCacheDir(), "custom_icons");
-      if (!iconDir.exists()) iconDir.mkdirs();
-      File outFile = new File(iconDir, fileName);
-      FileOutputStream fos = new FileOutputStream(outFile);
-      fos.write(fileData);
-      fos.close();
-      sendJsonResponse(os, new JSONObject().put("success", true).put("name", fileName).toString());
-    } catch (JSONException e) {
-      throw new IOException("JSON error", e);
-    }
-  }
-
-  private void handleIconReplace(String fullUri, PushbackInputStream pis,
-      String contentLengthStr, String contentType, OutputStream os) throws IOException {
-    try {
-      String pkg = extractQueryParam(fullUri, "pkg");
-      if (pkg == null || pkg.isEmpty()) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
-        return;
-      }
-      if (contentType == null || !contentType.contains("multipart/form-data")) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Expected multipart/form-data").toString());
-        return;
-      }
-      int contentLength = 0;
-      if (contentLengthStr != null) {
-        try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
-      }
-      if (contentLength <= 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing Content-Length").toString());
-        return;
-      }
-      String boundary = extractBoundary(contentType);
-      if (boundary == null) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
-        return;
-      }
-      byte[] allBytes = readFully(pis, contentLength);
-      String delimiter = "--" + boundary;
-      int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
-      if (pos < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No boundary found").toString());
-        return;
-      }
-      pos += delimiter.length();
-      if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') pos += 2;
-      else if (pos + 1 <= allBytes.length && allBytes[pos] == '\n') pos += 1;
-
-      int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
-      if (headerEnd < 0) headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
-      if (headerEnd < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No header end").toString());
-        return;
-      }
-      int dataStart = (allBytes[headerEnd] == '\r') ? headerEnd + 4 : headerEnd + 2;
-      int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), dataStart);
-      if (dataEnd < 0) dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), dataStart);
-      if (dataEnd < 0) {
-        sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No data end").toString());
-        return;
-      }
-      byte[] fileData = new byte[dataEnd - dataStart];
-      System.arraycopy(allBytes, dataStart, fileData, 0, fileData.length);
-
-      File iconDir = new File(getExternalCacheDir(), "custom_icons");
-      if (!iconDir.exists()) iconDir.mkdirs();
-      File outFile = new File(iconDir, pkg + ".png");
-      FileOutputStream fos = new FileOutputStream(outFile);
-      fos.write(fileData);
-      fos.close();
-
-      File documentsIconDir = new File(
-          Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-          "E-Ink Launcher/icon");
-      if (!documentsIconDir.exists()) documentsIconDir.mkdirs();
-      File documentsIcon = new File(documentsIconDir, pkg + ".png");
-      FileOutputStream fos2 = new FileOutputStream(documentsIcon);
-      fos2.write(fileData);
-      fos2.close();
-
-      sendJsonResponse(os, new JSONObject().put("success", true).toString());
-    } catch (JSONException e) {
-      throw new IOException("JSON error", e);
-    }
-  }
-
   private void sendJsonResponse(OutputStream os, String json) throws IOException {
     byte[] body = json.getBytes("UTF-8");
     String header = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=UTF-8\r\n"
@@ -889,92 +758,7 @@ public class HttpService extends Service {
   private void handlePost(String path, String fullUri, File rootDir, PushbackInputStream pis,
       String contentLengthStr, String contentType, OutputStream os) throws IOException {
     if (path.startsWith("/api/upload")) {
-      try {
-        String targetPath = extractQueryParam(fullUri, "path");
-        File targetDir = (targetPath != null && !targetPath.isEmpty()) ? new File(targetPath) : rootDir;
-        if (!targetDir.exists() || !targetDir.isDirectory()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Target is not a directory").toString());
-          return;
-        }
-        if (contentType == null || !contentType.contains("multipart/form-data")) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Expected multipart/form-data").toString());
-          return;
-        }
-        int contentLength = 0;
-        if (contentLengthStr != null) {
-          try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
-        }
-        if (contentLength <= 0) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing Content-Length").toString());
-          return;
-        }
-        String boundary = extractBoundary(contentType);
-        if (boundary == null) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing boundary").toString());
-          return;
-        }
-        byte[] allBytes;
-        if (contentLength > 0) {
-          allBytes = readFully(pis, contentLength);
-        } else {
-          ByteArrayOutputStream baos = new ByteArrayOutputStream();
-          byte[] buf = new byte[8192];
-          int read;
-          while ((read = pis.read(buf)) != -1) baos.write(buf, 0, read);
-          allBytes = baos.toByteArray();
-        }
-        int uploaded = 0;
-        String lastFilePath = null;
-        String delimiter = "--" + boundary;
-        int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
-        while (pos >= 0) {
-          pos += delimiter.length();
-          if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') {
-            pos += 2;
-          } else if (pos + 2 <= allBytes.length && allBytes[pos] == '\n') {
-            pos += 1;
-          }
-          int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
-          if (headerEnd < 0) headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
-          if (headerEnd < 0) break;
-          String partHeader;
-          if (allBytes[headerEnd] == '\r') {
-            partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8");
-            headerEnd += 4;
-          } else {
-            partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8");
-            headerEnd += 2;
-          }
-          String fileName = extractFileName(partHeader);
-          if (fileName == null) {
-            int nextBoundary = findBytes(allBytes, delimiter.getBytes("UTF-8"), headerEnd);
-            if (nextBoundary < 0) break;
-            pos = nextBoundary;
-            continue;
-          }
-          int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), headerEnd);
-          if (dataEnd < 0) dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), headerEnd);
-          if (dataEnd < 0) break;
-          byte[] fileData = new byte[dataEnd - headerEnd];
-          System.arraycopy(allBytes, headerEnd, fileData, 0, fileData.length);
-          File outFile = new File(targetDir, fileName);
-          FileOutputStream fos = new FileOutputStream(outFile);
-          fos.write(fileData);
-          fos.close();
-          uploaded++;
-          lastFilePath = outFile.getAbsolutePath();
-          int nextBoundary = findBytes(allBytes, delimiter.getBytes("UTF-8"), dataEnd);
-          if (nextBoundary < 0) break;
-          pos = nextBoundary;
-        }
-        JSONObject resp = new JSONObject();
-        resp.put("success", true);
-        resp.put("uploaded", uploaded);
-        if (lastFilePath != null) resp.put("path", lastFilePath);
-        sendJsonResponse(os, resp.toString());
-      } catch (JSONException e) {
-        throw new IOException("JSON error", e);
-      }
+      handleChunkedUpload(path, fullUri, pis, contentLengthStr, contentType, os);
       return;
     }
 
@@ -1033,8 +817,8 @@ public class HttpService extends Service {
       }
       return;
     }
-    if (path.startsWith("/api/icons/upload")) {
-      handleIconUpload(path, rootDir, pis, contentLengthStr, contentType, os);
+    if (path.startsWith("/api/icons/upload") || path.startsWith("/api/icons/replace")) {
+      handleChunkedUpload("/api/upload/start", fullUri, pis, contentLengthStr, contentType, os);
       return;
     }
     if (path.startsWith("/api/icons/assign")) {
@@ -1051,10 +835,6 @@ public class HttpService extends Service {
       } catch (JSONException e) {
         try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
       }
-      return;
-    }
-    if (path.startsWith("/api/icons/replace")) {
-      handleIconReplace(fullUri, pis, contentLengthStr, contentType, os);
       return;
     }
     if (path.startsWith("/api/open-settings")) {
@@ -1139,90 +919,7 @@ public class HttpService extends Service {
       return;
     }
 
-    if (contentType == null || !contentType.contains("multipart/form-data")) {
-      sendResponse(os, 400, "Bad Request", "text/plain", "Expected multipart/form-data");
-      return;
-    }
-
-    int contentLength = 0;
-    if (contentLengthStr != null) {
-      try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
-    }
-    if (contentLength <= 0) {
-      sendResponse(os, 400, "Bad Request", "text/plain", "Missing Content-Length");
-      return;
-    }
-
-    String boundary = extractBoundary(contentType);
-    if (boundary == null) {
-      sendResponse(os, 400, "Bad Request", "text/plain", "Missing boundary");
-      return;
-    }
-
-    byte[] allBytes = readFully(pis, contentLength);
-    File targetDir = new File(rootDir, path);
-    if (!targetDir.exists() || !targetDir.isDirectory()) {
-      sendResponse(os, 400, "Bad Request", "text/plain", "Target is not a directory");
-      return;
-    }
-
-    int uploaded = 0;
-    String delimiter = "--" + boundary;
-    int pos = findBytes(allBytes, delimiter.getBytes("UTF-8"));
-    while (pos >= 0) {
-      pos += delimiter.length();
-      if (pos + 2 <= allBytes.length && allBytes[pos] == '\r' && allBytes[pos + 1] == '\n') {
-        pos += 2;
-      } else if (pos + 2 <= allBytes.length && allBytes[pos] == '\n') {
-        pos += 1;
-      }
-
-      int headerEnd = findBytes(allBytes, "\r\n\r\n".getBytes("UTF-8"), pos);
-      if (headerEnd < 0) {
-        headerEnd = findBytes(allBytes, "\n\n".getBytes("UTF-8"), pos);
-      }
-      if (headerEnd < 0) break;
-
-      String partHeader;
-      if (allBytes[headerEnd] == '\r') {
-        partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8");
-        headerEnd += 4;
-      } else {
-        partHeader = new String(allBytes, pos, headerEnd - pos, "UTF-8");
-        headerEnd += 2;
-      }
-
-      String fileName = extractFileName(partHeader);
-      if (fileName == null) {
-        int nextBoundary = findBytes(allBytes, delimiter.getBytes("UTF-8"), headerEnd);
-        if (nextBoundary < 0) break;
-        pos = nextBoundary;
-        continue;
-      }
-
-      int dataEnd = findBytes(allBytes, ("\r\n" + delimiter).getBytes("UTF-8"), headerEnd);
-      if (dataEnd < 0) {
-        dataEnd = findBytes(allBytes, ("\n" + delimiter).getBytes("UTF-8"), headerEnd);
-      }
-      if (dataEnd < 0) break;
-
-      byte[] fileData = new byte[dataEnd - headerEnd];
-      System.arraycopy(allBytes, headerEnd, fileData, 0, fileData.length);
-
-      File outFile = new File(targetDir, fileName);
-      FileOutputStream fos = new FileOutputStream(outFile);
-      fos.write(fileData);
-      fos.close();
-      uploaded++;
-
-      int nextBoundary = findBytes(allBytes, delimiter.getBytes("UTF-8"), dataEnd);
-      if (nextBoundary < 0) break;
-      pos = nextBoundary;
-    }
-
-    String resp = "<html><body><h2>Uploaded " + uploaded + " file(s)</h2>"
-        + "<p><a href=\"" + escapeHtml(path) + "\">Back</a></p></body></html>";
-    sendResponse(os, 200, "OK", "text/html; charset=UTF-8", resp);
+    sendResponse(os, 404, "Not Found", "application/json", "{\"error\":\"Unknown POST endpoint\"}");
   }
 
   // ===== DELETE =====
@@ -1466,6 +1163,8 @@ public class HttpService extends Service {
     super.onCreate();
     instance = this;
     createNotificationChannel();
+    getUploadTempDir();
+    startCleanupTimer();
   }
 
   private static final String CHANNEL_ID = "http_server";
@@ -1601,6 +1300,405 @@ public class HttpService extends Service {
       if (ss != null) {
         try { ss.close(); } catch (IOException ignored) {}
       }
+    }
+  }
+
+  // ===== Chunked Upload =====
+
+  private static class UploadSession {
+    String sessionId;
+    File tempFile;
+    String action;
+    String targetPath;
+    String pkg;
+    String fileName;
+    long totalSize;
+    int totalChunks;
+    boolean[] confirmed;
+    long createdAt;
+  }
+
+  private File getUploadTempDir() {
+    if (uploadTempDir == null) {
+      uploadTempDir = new File(getExternalCacheDir(), "uploads");
+      if (!uploadTempDir.exists()) uploadTempDir.mkdirs();
+    }
+    return uploadTempDir;
+  }
+
+  private UploadSession getSession(String sessionId) {
+    return uploadSessions.get(sessionId);
+  }
+
+  private void removeSession(String sessionId) {
+    UploadSession session = uploadSessions.remove(sessionId);
+    if (session != null && session.tempFile.exists()) {
+      session.tempFile.delete();
+    }
+  }
+
+  private void startCleanupTimer() {
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        while (running) {
+          try {
+            Thread.sleep(2 * 60 * 1000);
+          } catch (InterruptedException e) {
+            break;
+          }
+          long now = System.currentTimeMillis();
+          for (String sid : uploadSessions.keySet().toArray(new String[0])) {
+            UploadSession s = uploadSessions.get(sid);
+            if (s != null && now - s.createdAt > SESSION_TIMEOUT_MS) {
+              removeSession(sid);
+            }
+          }
+        }
+      }
+    }, "upload-cleanup").start();
+  }
+
+  private void handleUploadStart(String body, OutputStream os) throws IOException {
+    try {
+      JSONObject req = new JSONObject(body);
+      String filename = req.optString("filename", "");
+      long size = req.optLong("size", 0);
+      String action = req.optString("action", "file");
+      String targetPath = req.optString("targetPath", "");
+      String pkg = req.optString("pkg", "");
+
+      if (filename.isEmpty() || size <= 0) {
+        sendJsonError(os, "Missing filename or size");
+        return;
+      }
+
+      String sessionId = UUID.randomUUID().toString();
+      int totalChunks = (int) Math.ceil((double) size / CHUNK_SIZE);
+      File tempFile = new File(getUploadTempDir(), sessionId + ".part");
+
+      UploadSession session = new UploadSession();
+      session.sessionId = sessionId;
+      session.tempFile = tempFile;
+      session.action = action;
+      session.targetPath = targetPath;
+      session.pkg = pkg;
+      session.fileName = filename;
+      session.totalSize = size;
+      session.totalChunks = totalChunks;
+      session.confirmed = new boolean[totalChunks];
+      session.createdAt = System.currentTimeMillis();
+
+      uploadSessions.put(sessionId, session);
+
+      JSONObject resp = new JSONObject();
+      resp.put("success", true);
+      resp.put("sessionId", sessionId);
+      resp.put("totalChunks", totalChunks);
+      resp.put("chunkSize", CHUNK_SIZE);
+      sendJsonResponse(os, resp.toString());
+    } catch (JSONException e) {
+      sendJsonError(os, "Invalid JSON");
+    }
+  }
+
+  private void handleUploadChunk(String queryStr, InputStream is, OutputStream os) throws IOException {
+    String sessionId = extractQueryParam(queryStr, "sessionId");
+    String chunkIndexStr = extractQueryParam(queryStr, "chunkIndex");
+
+    if (sessionId == null) {
+      sendJsonError(os, "Missing sessionId");
+      return;
+    }
+
+    UploadSession session = getSession(sessionId);
+    if (session == null) {
+      sendJsonError(os, "Session not found");
+      return;
+    }
+
+    int chunkIndex;
+    if (chunkIndexStr != null) {
+      try { chunkIndex = Integer.parseInt(chunkIndexStr); } catch (NumberFormatException e) {
+        sendJsonError(os, "Invalid chunkIndex");
+        return;
+      }
+    } else {
+      sendJsonError(os, "Missing chunkIndex");
+      return;
+    }
+
+    if (chunkIndex < 0 || chunkIndex >= session.totalChunks) {
+      sendJsonError(os, "Chunk index out of range");
+      return;
+    }
+
+    if (session.confirmed[chunkIndex]) {
+      long offset = 0;
+      for (int i = 0; i < chunkIndex; i++) {
+        if (session.confirmed[i]) offset += CHUNK_SIZE;
+      }
+      try {
+        JSONObject resp = new JSONObject();
+        resp.put("success", true);
+        resp.put("offset", offset);
+        sendJsonResponse(os, resp.toString());
+      } catch (JSONException e) {
+        sendJsonError(os, "Response error");
+      }
+      return;
+    }
+
+    long expectedSize = CHUNK_SIZE;
+    if (chunkIndex == session.totalChunks - 1) {
+      expectedSize = session.totalSize - (long) chunkIndex * CHUNK_SIZE;
+    }
+
+    RandomAccessFile raf = new RandomAccessFile(session.tempFile, "rw");
+    raf.seek((long) chunkIndex * CHUNK_SIZE);
+
+    byte[] buf = new byte[8192];
+    long totalRead = 0;
+    while (totalRead < expectedSize) {
+      int toRead = (int) Math.min(buf.length, expectedSize - totalRead);
+      int read = is.read(buf, 0, toRead);
+      if (read < 0) break;
+      raf.write(buf, 0, read);
+      totalRead += read;
+    }
+    raf.close();
+
+    if (totalRead < expectedSize) {
+      sendJsonError(os, "Incomplete chunk: expected " + expectedSize + ", got " + totalRead);
+      return;
+    }
+
+    session.confirmed[chunkIndex] = true;
+
+    long offset = 0;
+    for (int i = 0; i < chunkIndex; i++) {
+      if (session.confirmed[i]) offset += CHUNK_SIZE;
+    }
+    offset += totalRead;
+
+    try {
+      JSONObject resp = new JSONObject();
+      resp.put("success", true);
+      resp.put("offset", offset);
+      sendJsonResponse(os, resp.toString());
+    } catch (JSONException e) {
+      sendJsonError(os, "Response error");
+    }
+  }
+
+  private void handleUploadStatus(String queryStr, OutputStream os) throws IOException {
+    String sessionId = extractQueryParam(queryStr, "sessionId");
+    if (sessionId == null) {
+      sendJsonError(os, "Missing sessionId");
+      return;
+    }
+
+    UploadSession session = getSession(sessionId);
+    if (session == null) {
+      sendJsonError(os, "Session not found");
+      return;
+    }
+
+    int confirmed = 0;
+    for (boolean b : session.confirmed) {
+      if (b) confirmed++;
+    }
+
+    long offset = 0;
+    for (int i = 0; i < session.totalChunks; i++) {
+      if (session.confirmed[i]) {
+        long chunkSize = CHUNK_SIZE;
+        if (i == session.totalChunks - 1) {
+          chunkSize = session.totalSize - (long) i * CHUNK_SIZE;
+        }
+        offset += chunkSize;
+      }
+    }
+
+    try {
+      JSONObject resp = new JSONObject();
+      resp.put("sessionId", sessionId);
+      resp.put("confirmedChunks", confirmed);
+      resp.put("totalChunks", session.totalChunks);
+      resp.put("offset", offset);
+      resp.put("complete", confirmed == session.totalChunks);
+      sendJsonResponse(os, resp.toString());
+    } catch (JSONException e) {
+      sendJsonError(os, "Response error");
+    }
+  }
+
+  private void handleUploadComplete(String queryStr, OutputStream os) throws IOException {
+    String sessionId = extractQueryParam(queryStr, "sessionId");
+    if (sessionId == null) {
+      sendJsonError(os, "Missing sessionId");
+      return;
+    }
+
+    UploadSession session = getSession(sessionId);
+    if (session == null) {
+      sendJsonError(os, "Session not found");
+      return;
+    }
+
+    for (boolean b : session.confirmed) {
+      if (!b) {
+        sendJsonError(os, "Upload incomplete");
+        return;
+      }
+    }
+
+    if (session.tempFile.length() != session.totalSize) {
+      sendJsonError(os, "File size mismatch");
+      return;
+    }
+
+    String resultPath = null;
+
+    try {
+      if ("file".equals(session.action)) {
+        File targetDir = session.targetPath.isEmpty() ? Environment.getExternalStorageDirectory() : new File(session.targetPath);
+        if (!targetDir.exists() || !targetDir.isDirectory()) {
+          sendJsonError(os, "Target directory invalid");
+          return;
+        }
+        File dest = new File(targetDir, session.fileName);
+        session.tempFile.renameTo(dest);
+        resultPath = dest.getAbsolutePath();
+      } else if ("icon-upload".equals(session.action)) {
+        File iconDir = new File(getExternalCacheDir(), "custom_icons");
+        if (!iconDir.exists()) iconDir.mkdirs();
+        File dest = new File(iconDir, session.fileName);
+        session.tempFile.renameTo(dest);
+        resultPath = dest.getAbsolutePath();
+      } else if ("icon-replace".equals(session.action)) {
+        if (session.pkg == null || session.pkg.isEmpty()) {
+          sendJsonError(os, "Missing pkg");
+          return;
+        }
+        File iconDir = new File(getExternalCacheDir(), "custom_icons");
+        if (!iconDir.exists()) iconDir.mkdirs();
+        File dest = new File(iconDir, session.pkg + ".png");
+        session.tempFile.renameTo(dest);
+        resultPath = dest.getAbsolutePath();
+
+        File documentsIconDir = new File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            "E-Ink Launcher/icon");
+        if (!documentsIconDir.exists()) documentsIconDir.mkdirs();
+        File documentsIcon = new File(documentsIconDir, session.pkg + ".png");
+        FileInputStream fis = new FileInputStream(dest);
+        FileOutputStream fos2 = new FileOutputStream(documentsIcon);
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = fis.read(buf)) != -1) fos2.write(buf, 0, n);
+        fis.close();
+        fos2.close();
+      } else if ("install".equals(session.action)) {
+        File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        if (!downloadDir.exists()) downloadDir.mkdirs();
+        File dest = new File(downloadDir, session.fileName);
+        session.tempFile.renameTo(dest);
+        resultPath = dest.getAbsolutePath();
+
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          intent.setDataAndType(
+              androidx.core.content.FileProvider.getUriForFile(HttpService.this, getPackageName() + ".fileProvider", dest),
+              "application/vnd.android.package-archive");
+          intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+          intent.setDataAndType(Uri.fromFile(dest), "application/vnd.android.package-archive");
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+      }
+    } catch (Exception e) {
+      sendJsonError(os, e.getMessage());
+      return;
+    } finally {
+      removeSession(sessionId);
+    }
+
+    try {
+      JSONObject resp = new JSONObject();
+      resp.put("success", true);
+      if (resultPath != null) resp.put("path", resultPath);
+      sendJsonResponse(os, resp.toString());
+    } catch (JSONException e) {
+      sendJsonError(os, "Response error");
+    }
+  }
+
+  private void handleChunkedUpload(String path, String fullUri, PushbackInputStream pis,
+      String contentLengthStr, String contentType, OutputStream os) throws IOException {
+    if ("/api/upload/start".equals(path)) {
+      int contentLength = 0;
+      if (contentLengthStr != null) {
+        try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
+      }
+      byte[] bodyBytes = readFully(pis, contentLength > 0 ? contentLength : 4096);
+      String body = new String(bodyBytes, "UTF-8");
+      handleUploadStart(body, os);
+      return;
+    }
+
+    if ("/api/upload/chunk".equals(path)) {
+      String queryStr = fullUri;
+      int qIdx = fullUri.indexOf('?');
+      if (qIdx >= 0) queryStr = fullUri.substring(qIdx + 1);
+      handleUploadChunk(queryStr, pis, os);
+      return;
+    }
+
+    if ("/api/upload/status".equals(path)) {
+      String queryStr = fullUri;
+      int qIdx = fullUri.indexOf('?');
+      if (qIdx >= 0) queryStr = fullUri.substring(qIdx + 1);
+      handleUploadStatus(queryStr, os);
+      return;
+    }
+
+    if ("/api/upload/complete".equals(path)) {
+      String queryStr = fullUri;
+      int qIdx2 = fullUri.indexOf('?');
+      if (qIdx2 >= 0) queryStr = fullUri.substring(qIdx2 + 1);
+      handleUploadComplete(queryStr, os);
+      return;
+    }
+
+    if ("/api/upload/cancel".equals(path)) {
+      String queryStr = fullUri;
+      int qIdx3 = fullUri.indexOf('?');
+      if (qIdx3 >= 0) queryStr = fullUri.substring(qIdx3 + 1);
+      String sessionId = extractQueryParam(queryStr, "sessionId");
+      if (sessionId != null) {
+        removeSession(sessionId);
+      }
+      sendJsonOk(os);
+      return;
+    }
+
+    sendJsonError(os, "Unknown upload endpoint");
+  }
+
+  private void sendJsonOk(OutputStream os) throws IOException {
+    sendJsonResponse(os, "{\"success\":true}");
+  }
+
+  private void sendJsonError(OutputStream os, String error) throws IOException {
+    try {
+      JSONObject json = new JSONObject();
+      json.put("success", false);
+      json.put("error", error);
+      sendJsonResponse(os, json.toString());
+    } catch (JSONException e) {
+      throw new IOException("JSON error", e);
     }
   }
 }

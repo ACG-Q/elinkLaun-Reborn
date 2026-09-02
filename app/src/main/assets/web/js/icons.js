@@ -86,9 +86,14 @@ var Icons = {
 
   replaceIcon: function(pkg, file) {
     showToast('Uploading icon...');
-    var fd = new FormData();
-    fd.append('file', file);
-    API.post('/api/icons/replace?pkg=' + encodeURIComponent(pkg), fd).then(function(d) {
+    API.uploadChunked({
+      action: 'icon-replace',
+      pkg: pkg,
+      file: file,
+      onProgress: function(pct) {
+        if (pct >= 100) showToast('Processing...');
+      }
+    }).then(function(d) {
       if (d.success) {
         showToast('Icon replaced');
         Icons.loadIcons();

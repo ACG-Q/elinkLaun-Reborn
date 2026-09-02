@@ -41,6 +41,10 @@ var FM = {
         + svgIcon(ICONS.upload, 24, 24)
         + '<div style="font-size:13px;font-weight:500">Tap to upload files</div>'
         + '<input type="file" id="fileInput" multiple style="display:none">'
+        + '<div class="upload-progress" id="uploadProgress" style="display:none">'
+        + '<div class="upload-progress-bar" id="uploadProgressBar"></div>'
+        + '<div class="upload-progress-text" id="uploadProgressText">0%</div>'
+        + '</div>'
         + '</div>';
 
       el.innerHTML = html;
@@ -64,9 +68,27 @@ var FM = {
         zone.addEventListener('click', function() { input.click(); });
         input.addEventListener('change', function() {
           if (this.files.length > 0) {
-            API.upload(currentPath, this.files).then(function(r) {
-              showToast('Uploaded ' + r.uploaded + ' file(s)');
+            var file = this.files[0];
+            var progressEl = document.getElementById('uploadProgress');
+            var progressBar = document.getElementById('uploadProgressBar');
+            var progressText = document.getElementById('uploadProgressText');
+            progressEl.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            API.uploadChunked({
+              targetPath: currentPath,
+              file: file,
+              onProgress: function(pct) {
+                progressBar.style.width = pct + '%';
+                progressText.textContent = pct + '%';
+              }
+            }).then(function(r) {
+              showToast('Uploaded: ' + r.path);
               FM.render(el, qp);
+            }).catch(function() {
+              showToast('Upload failed');
+            }).finally(function() {
+              progressEl.style.display = 'none';
             });
           }
         });
