@@ -21,36 +21,57 @@ export async function deleteAction(url) {
   return res.json()
 }
 
-export async function uploadFile(path, file, onProgress) {
+export async function uploadFile(path, file, options = {}) {
   const CHUNK_SIZE = 256 * 1024
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  const onProgress = options.onProgress
+  const action = options.action || 'file'
+  const targetPath = options.targetPath || ''
+  const pkg = options.pkg || ''
 
   const startRes = await request('/api/upload/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path, totalChunks, fileName: file.name })
+    body: JSON.stringify({
+      filename: file.name,
+      size: file.size,
+      action: action,
+      targetPath: targetPath,
+      pkg: pkg
+    })
   })
-  const { sessionId } = await startRes.json()
+  const startData = await startRes.json()
+  if (!startData.success) throw new Error(startData.error || 'Failed to start upload')
+
+  const sessionId = startData.sessionId
+  const totalChunks = startData.totalChunks
+  const chunkSize = startData.chunkSize
+  let uploaded = 0
 
   for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE
-    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const start = i * chunkSize
+    const end = Math.min(start + chunkSize, file.size)
     const chunk = file.slice(start, end)
 
-    const formData = new FormData()
-    formData.append('sessionId', sessionId)
-    formData.append('index', i)
-    formData.append('chunk', chunk)
-
-    await request('/api/upload/chunk', { method: 'POST', body: formData })
-    if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100))
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/upload/chunk?sessionId=' + sessionId + '&chunkIndex=' + i)
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      xhr.responseType = 'json'
+      xhr.onload = () => {
+        if (xhr.response && xhr.response.success) {
+          uploaded++
+          if (onProgress) onProgress(Math.round(uploaded / totalChunks * 100))
+          resolve()
+        } else {
+          reject(new Error(xhr.response ? xhr.response.error : 'Chunk upload failed'))
+        }
+      }
+      xhr.onerror = () => reject(new Error('Network error'))
+      xhr.send(chunk)
+    })
   }
 
-  const completeRes = await request('/api/upload/complete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId })
-  })
+  const completeRes = await request('/api/upload/complete?sessionId=' + sessionId, { method: 'POST' })
   return completeRes.json()
 }
 
@@ -62,6 +83,6 @@ export function toast(msg, type = 'info') {
   requestAnimationFrame(() => el.classList.add('show'))
   setTimeout(() => {
     el.classList.remove('show')
-    setTimeout(() => el.remove(), 300)
+    setTimeout(() => el.remove(), 2000)
   }, 2000)
 }
