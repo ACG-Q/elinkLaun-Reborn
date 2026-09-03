@@ -21,7 +21,7 @@ import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.content.ContentResolver;
 import android.content.IntentFilter;
-import android.content.res.AssetManager;
+
 import android.media.AudioManager;
 import android.os.BatteryManager;
 import android.os.Build;
@@ -42,7 +42,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -69,7 +68,6 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.util.Base64;
 import java.io.ByteArrayOutputStream;
 
 /**
@@ -205,10 +203,6 @@ public class HttpService extends Service {
         }
       }
 
-      if ("/".equals(path)) {
-        path = "/";
-      }
-
       File rootDir = Environment.getExternalStorageDirectory();
 
       if ("GET".equals(method)) {
@@ -243,7 +237,6 @@ public class HttpService extends Service {
     if ("/api/volume".equals(path)) { sendJsonVolume(os); return; }
     if ("/api/brightness".equals(path)) { sendJsonBrightness(os); return; }
     if ("/api/rotation".equals(path)) { sendJsonRotation(os); return; }
-    if ("/api/settings-links".equals(path)) { sendJsonSettingsLinks(os); return; }
     if (path.startsWith("/custom_icons/")) { sendCustomIconFile(path, os); return; }
 
     if ("/".equals(path) || "/index.html".equals(path)) { sendAssetFile("index.html", os); return; }
@@ -258,31 +251,35 @@ public class HttpService extends Service {
   // ===== Static file serving =====
 
   private void sendAssetFile(String assetPath, OutputStream os) throws IOException {
-    try {
-      InputStream is = getAssets().open(assetPath);
+    try (InputStream is = getAssets().open(assetPath)) {
       String mime = getMimeType(assetPath);
       byte[] header = ("HTTP/1.1 200 OK\r\nContent-Type: " + mime + "\r\nConnection: close\r\n\r\n").getBytes("UTF-8");
       os.write(header);
-      byte[] buf = new byte[8192];
-      int n;
-      while ((n = is.read(buf)) != -1) os.write(buf, 0, n);
-      is.close();
+      copyStream(is, os);
     } catch (IOException e) {
       sendResponse(os, 404, "Not Found", "text/plain", "404 Not Found");
     }
   }
 
-  private String getMimeType(String path) {
+  private static String getMimeType(String path) {
     String lower = path.toLowerCase();
     if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
     if (lower.endsWith(".css")) return "text/css";
     if (lower.endsWith(".js")) return "application/javascript";
     if (lower.endsWith(".json")) return "application/json";
+    if (lower.endsWith(".xml")) return "text/xml";
+    if (lower.endsWith(".txt") || lower.endsWith(".log")) return "text/plain";
     if (lower.endsWith(".png")) return "image/png";
     if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
     if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".webp")) return "image/webp";
     if (lower.endsWith(".svg")) return "image/svg+xml";
     if (lower.endsWith(".ico")) return "image/x-icon";
+    if (lower.endsWith(".pdf")) return "application/pdf";
+    if (lower.endsWith(".zip")) return "application/zip";
+    if (lower.endsWith(".mp3")) return "audio/mpeg";
+    if (lower.endsWith(".mp4")) return "video/mp4";
+    if (lower.endsWith(".apk")) return "application/vnd.android.package-archive";
     if (lower.endsWith(".woff2")) return "font/woff2";
     if (lower.endsWith(".woff")) return "font/woff";
     if (lower.endsWith(".ttf")) return "font/ttf";
@@ -455,16 +452,6 @@ public class HttpService extends Service {
     }
   }
 
-  private JSONObject iconInfo(String key, String iconName) throws JSONException {
-    JSONObject info = new JSONObject();
-    info.put("label", key.substring(0, 1).toUpperCase() + key.substring(1));
-    info.put("icon", iconName);
-    if (iconName.endsWith(".png") || iconName.endsWith(".jpg") || iconName.endsWith(".webp")) {
-      info.put("url", "/custom_icons/" + iconName);
-    }
-    return info;
-  }
-
   private void sendJsonDevice(OutputStream os) throws IOException {
     try {
       JSONObject json = new JSONObject();
@@ -623,12 +610,7 @@ public class HttpService extends Service {
       json.put("value", brightness);
       sendJsonResponse(os, json.toString());
     } catch (Exception e) {
-      try {
-        JSONObject json = new JSONObject();
-        json.put("value", 0);
-        json.put("error", "Cannot read brightness");
-        sendJsonResponse(os, json.toString());
-      } catch (JSONException ignored) {}
+      sendJsonError(os, "Cannot read brightness");
     }
   }
 
@@ -639,42 +621,7 @@ public class HttpService extends Service {
       json.put("enabled", rotation == 1);
       sendJsonResponse(os, json.toString());
     } catch (Exception e) {
-      try {
-        JSONObject json = new JSONObject();
-        json.put("enabled", false);
-        sendJsonResponse(os, json.toString());
-      } catch (JSONException ignored) {}
-    }
-  }
-
-  private void sendJsonSettingsLinks(OutputStream os) throws IOException {
-    try {
-      JSONObject json = new JSONObject();
-      JSONArray arr = new JSONArray();
-      String[][] links = {
-        {"WiFi", "android.settings.WIFI_SETTINGS"},
-        {"Bluetooth", "android.settings.BLUETOOTH_SETTINGS"},
-        {"Display", "android.settings.DISPLAY_SETTINGS"},
-        {"Sound", "android.settings.SOUND_SETTINGS"},
-        {"Apps", "android.settings.APPLICATION_SETTINGS"},
-        {"Developer", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS"},
-        {"Battery", "android.settings.BATTERY_SAVER_SETTINGS"},
-        {"Storage", "android.settings.INTERNAL_STORAGE_SETTINGS"},
-        {"Notifications", "android.settings.NOTIFICATION_LISTENER_SETTINGS"},
-        {"Location", "android.settings.LOCATION_SOURCE_SETTINGS"},
-        {"Security", "android.settings.SECURITY_SETTINGS"},
-        {"About", "android.settings.DEVICE_INFO_SETTINGS"}
-      };
-      for (String[] link : links) {
-        JSONObject item = new JSONObject();
-        item.put("name", link[0]);
-        item.put("action", link[1]);
-        arr.put(item);
-      }
-      json.put("links", arr);
-      sendJsonResponse(os, json.toString());
-    } catch (JSONException e) {
-      throw new IOException("JSON error", e);
+      sendJsonError(os, "Cannot read rotation");
     }
   }
 
@@ -696,11 +643,9 @@ public class HttpService extends Service {
         + "Content-Length: " + iconFile.length() + "\r\n"
         + "Cache-Control: max-age=86400\r\nConnection: close\r\n\r\n").getBytes("UTF-8");
     os.write(header);
-    FileInputStream fis = new FileInputStream(iconFile);
-    byte[] buf = new byte[8192];
-    int n;
-    while ((n = fis.read(buf)) != -1) os.write(buf, 0, n);
-    fis.close();
+    try (FileInputStream fis = new FileInputStream(iconFile)) {
+      copyStream(fis, os);
+    }
   }
 
   private void sendJsonResponse(OutputStream os, String json) throws IOException {
@@ -715,25 +660,7 @@ public class HttpService extends Service {
   // ===== POST (Upload) =====
 
   private void sendFile(File file, OutputStream os) throws IOException {
-    String name = file.getName().toLowerCase();
-    String contentType = "application/octet-stream";
-    if (name.endsWith(".html") || name.endsWith(".htm")) contentType = "text/html";
-    else if (name.endsWith(".css")) contentType = "text/css";
-    else if (name.endsWith(".js")) contentType = "application/javascript";
-    else if (name.endsWith(".json")) contentType = "application/json";
-    else if (name.endsWith(".xml")) contentType = "text/xml";
-    else if (name.endsWith(".txt") || name.endsWith(".log")) contentType = "text/plain";
-    else if (name.endsWith(".png")) contentType = "image/png";
-    else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
-    else if (name.endsWith(".gif")) contentType = "image/gif";
-    else if (name.endsWith(".webp")) contentType = "image/webp";
-    else if (name.endsWith(".svg")) contentType = "image/svg+xml";
-    else if (name.endsWith(".pdf")) contentType = "application/pdf";
-    else if (name.endsWith(".zip")) contentType = "application/zip";
-    else if (name.endsWith(".mp3")) contentType = "audio/mpeg";
-    else if (name.endsWith(".mp4")) contentType = "video/mp4";
-    else if (name.endsWith(".apk")) contentType = "application/vnd.android.package-archive";
-
+    String contentType = getMimeType(file.getName());
     String header = "HTTP/1.1 200 OK\r\n"
         + "Content-Type: " + contentType + "\r\n"
         + "Content-Length: " + file.length() + "\r\n"
@@ -742,14 +669,9 @@ public class HttpService extends Service {
         + "\r\n";
     os.write(header.getBytes("UTF-8"));
     os.flush();
-
-    FileInputStream fis = new FileInputStream(file);
-    byte[] buffer = new byte[8192];
-    int bytesRead;
-    while ((bytesRead = fis.read(buffer)) != -1) {
-      os.write(buffer, 0, bytesRead);
+    try (FileInputStream fis = new FileInputStream(file)) {
+      copyStream(fis, os);
     }
-    fis.close();
   }
 
   // ===== POST (Upload) =====
@@ -767,7 +689,7 @@ public class HttpService extends Service {
         String valueStr = extractQueryParam(fullUri, "value");
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         if (am == null || streamName == null || valueStr == null) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          sendJsonError(os, "Missing parameters");
           return;
         }
         int streamType;
@@ -776,13 +698,13 @@ public class HttpService extends Service {
           case "ring": streamType = AudioManager.STREAM_RING; break;
           case "notification": streamType = AudioManager.STREAM_NOTIFICATION; break;
           case "alarm": streamType = AudioManager.STREAM_ALARM; break;
-          default: sendJsonResponse(os, new JSONObject().put("success", false).toString()); return;
+          default: sendJsonError(os, "Invalid stream"); return;
         }
         int value = Integer.parseInt(valueStr);
         am.setStreamVolume(streamType, value, 0);
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        sendJsonOk(os);
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, "Volume error");
       }
       return;
     }
@@ -790,14 +712,14 @@ public class HttpService extends Service {
       try {
         String brightnessStr = extractQueryParam(fullUri, "value");
         if (brightnessStr == null) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          sendJsonError(os, "Missing value");
           return;
         }
         int value = Integer.parseInt(brightnessStr);
         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, value);
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        sendJsonOk(os);
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, "Brightness error");
       }
       return;
     }
@@ -805,14 +727,14 @@ public class HttpService extends Service {
       try {
         String enabledStr = extractQueryParam(fullUri, "enabled");
         if (enabledStr == null) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          sendJsonError(os, "Missing enabled");
           return;
         }
         int val = "true".equals(enabledStr) ? 1 : 0;
         Settings.System.putInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, val);
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        sendJsonOk(os);
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, "Rotation error");
       }
       return;
     }
@@ -825,14 +747,14 @@ public class HttpService extends Service {
         String slot = extractQueryParam(fullUri, "slot");
         String icon = extractQueryParam(fullUri, "icon");
         if (slot == null || icon == null) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
+          sendJsonError(os, "Missing slot or icon");
           return;
         }
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         prefs.edit().putString("icon_" + slot, icon).apply();
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
-      } catch (JSONException e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
+        sendJsonOk(os);
+      } catch (Exception e) {
+        sendJsonError(os, "Assign error");
       }
       return;
     }
@@ -843,12 +765,12 @@ public class HttpService extends Service {
           Intent intent = new Intent(action);
           intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
           startActivity(intent);
-          sendJsonResponse(os, new JSONObject().put("success", true).toString());
+          sendJsonOk(os);
         } else {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing action").toString());
+          sendJsonError(os, "Missing action");
         }
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, e.getMessage());
       }
       return;
     }
@@ -856,12 +778,12 @@ public class HttpService extends Service {
       try {
         String targetPath = extractQueryParam(fullUri, "path");
         if (targetPath == null || targetPath.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing path").toString());
+          sendJsonError(os, "Missing path");
           return;
         }
         File apkFile = new File(targetPath);
         if (!apkFile.exists() || !apkFile.getName().toLowerCase().endsWith(".apk")) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Invalid APK file").toString());
+          sendJsonError(os, "Invalid APK file");
           return;
         }
         Intent intent = new Intent(Intent.ACTION_VIEW);
@@ -875,9 +797,9 @@ public class HttpService extends Service {
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        sendJsonOk(os);
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, e.getMessage());
       }
       return;
     }
@@ -885,15 +807,15 @@ public class HttpService extends Service {
       try {
         String pkg = extractQueryParam(fullUri, "pkg");
         if (pkg == null || pkg.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+          sendJsonError(os, "Missing pkg");
           return;
         }
         Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
-        sendJsonResponse(os, new JSONObject().put("success", true).toString());
+        sendJsonOk(os);
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, e.getMessage());
       }
       return;
     }
@@ -901,19 +823,19 @@ public class HttpService extends Service {
       try {
         String pkg = extractQueryParam(fullUri, "pkg");
         if (pkg == null || pkg.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
+          sendJsonError(os, "Missing pkg");
           return;
         }
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(pkg);
         if (launchIntent != null) {
           launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
           startActivity(launchIntent);
-          sendJsonResponse(os, new JSONObject().put("success", true).toString());
+          sendJsonOk(os);
         } else {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "No launch intent").toString());
+          sendJsonError(os, "No launch intent");
         }
       } catch (Exception e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).put("error", e.getMessage()).toString()); } catch (JSONException ignored) {}
+        sendJsonError(os, e.getMessage());
       }
       return;
     }
@@ -928,7 +850,7 @@ public class HttpService extends Service {
       try {
         String filePath = extractQueryParam(fullUri, "path");
         if (filePath == null || filePath.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing path").toString());
+          sendJsonError(os, "Missing path");
           return;
         }
         File file = new File(filePath);
@@ -938,55 +860,6 @@ public class HttpService extends Service {
         throw new IOException("JSON error", e);
       }
       return;
-    }
-    if (path.startsWith("/api/icons/custom")) {
-      try {
-        String name = extractQueryParam(fullUri, "name");
-        if (name == null || name.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
-          return;
-        }
-        if (name.contains("..") || name.contains("/") || name.contains("\\")) {
-          sendJsonResponse(os, new JSONObject().put("success", false).toString());
-          return;
-        }
-        File iconFile = new File(getExternalCacheDir(), "custom_icons/" + name);
-        boolean deleted = iconFile.exists() && iconFile.delete();
-        sendJsonResponse(os, new JSONObject().put("success", deleted).toString());
-      } catch (JSONException e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
-      }
-      return;
-    }
-    if (path.startsWith("/api/icons/replace")) {
-      try {
-        String pkg = extractQueryParam(fullUri, "pkg");
-        if (pkg == null || pkg.isEmpty()) {
-          sendJsonResponse(os, new JSONObject().put("success", false).put("error", "Missing pkg").toString());
-          return;
-        }
-        File iconDir = new File(getExternalCacheDir(), "custom_icons");
-        File iconFile = new File(iconDir, pkg + ".png");
-        boolean deleted = iconFile.exists() && iconFile.delete();
-        File documentsIcon = new File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            "E-Ink Launcher/icon/" + pkg + ".png");
-        if (documentsIcon.exists()) documentsIcon.delete();
-        sendJsonResponse(os, new JSONObject().put("success", true).put("deleted", deleted).toString());
-      } catch (JSONException e) {
-        try { sendJsonResponse(os, new JSONObject().put("success", false).toString()); } catch (JSONException ignored) {}
-      }
-      return;
-    }
-    File file = new File(rootDir, path);
-    if (!file.exists()) {
-      sendResponse(os, 404, "Not Found", "text/plain", "404 Not Found");
-      return;
-    }
-    if (file.delete()) {
-      sendResponse(os, 200, "OK", "text/plain", "Deleted");
-    } else {
-      sendResponse(os, 500, "Internal Server Error", "text/plain", "Failed to delete");
     }
   }
 
@@ -1011,19 +884,10 @@ public class HttpService extends Service {
         + "<p><a href=\"/\">Back to root</a></p></body></html>";
   }
 
-  private String extractBoundary(String contentType) {
-    String[] parts = contentType.split(";");
-    for (String part : parts) {
-      String trimmed = part.trim();
-      if (trimmed.startsWith("boundary=")) {
-        String b = trimmed.substring(9).trim();
-        if (b.startsWith("\"") && b.endsWith("\"")) {
-          b = b.substring(1, b.length() - 1);
-        }
-        return b;
-      }
-    }
-    return null;
+  private static void copyStream(InputStream in, OutputStream out) throws IOException {
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
   }
 
   private String extractQueryParam(String uri, String name) {
@@ -1044,24 +908,6 @@ public class HttpService extends Service {
     return null;
   }
 
-  private String extractFileName(String partHeader) {
-    String[] lines = partHeader.split("\r\n");
-    for (String line : lines) {
-      String lower = line.toLowerCase();
-      if (lower.contains("content-disposition")) {
-        int fnIdx = lower.indexOf("filename=\"");
-        if (fnIdx >= 0) {
-          int start = fnIdx + 10;
-          int end = line.indexOf('"', start);
-          if (end > start) {
-            return line.substring(start, end);
-          }
-        }
-      }
-    }
-    return null;
-  }
-
   private byte[] readFully(PushbackInputStream pis, int length) throws IOException {
     byte[] data = new byte[length];
     int offset = 0;
@@ -1073,27 +919,6 @@ public class HttpService extends Service {
     return data;
   }
 
-  private int findBytes(byte[] haystack, byte[] needle) {
-    return findBytes(haystack, needle, 0);
-  }
-
-  private int findBytes(byte[] haystack, byte[] needle, int start) {
-    outer:
-    for (int i = start; i <= haystack.length - needle.length; i++) {
-      for (int j = 0; j < needle.length; j++) {
-        if (haystack[i + j] != needle[j]) continue outer;
-      }
-      return i;
-    }
-    return -1;
-  }
-
-  private String escapeHtml(String s) {
-    if (s == null) return "";
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        .replace("\"", "&quot;").replace("'", "&#39;");
-  }
-
   private Bitmap drawableToBitmap(Drawable drawable) {
     if (drawable instanceof BitmapDrawable) {
       return ((BitmapDrawable) drawable).getBitmap();
@@ -1103,7 +928,7 @@ public class HttpService extends Service {
     if (w <= 0) w = 96;
     if (h <= 0) h = 96;
     Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-    android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+    Canvas canvas = new Canvas(bmp);
     drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
     drawable.draw(canvas);
     return bmp;
@@ -1490,48 +1315,6 @@ public class HttpService extends Service {
     }
   }
 
-  private void handleUploadStatus(String queryStr, OutputStream os) throws IOException {
-    String sessionId = extractQueryParam(queryStr, "sessionId");
-    if (sessionId == null) {
-      sendJsonError(os, "Missing sessionId");
-      return;
-    }
-
-    UploadSession session = getSession(sessionId);
-    if (session == null) {
-      sendJsonError(os, "Session not found");
-      return;
-    }
-
-    int confirmed = 0;
-    for (boolean b : session.confirmed) {
-      if (b) confirmed++;
-    }
-
-    long offset = 0;
-    for (int i = 0; i < session.totalChunks; i++) {
-      if (session.confirmed[i]) {
-        long chunkSize = CHUNK_SIZE;
-        if (i == session.totalChunks - 1) {
-          chunkSize = session.totalSize - (long) i * CHUNK_SIZE;
-        }
-        offset += chunkSize;
-      }
-    }
-
-    try {
-      JSONObject resp = new JSONObject();
-      resp.put("sessionId", sessionId);
-      resp.put("confirmedChunks", confirmed);
-      resp.put("totalChunks", session.totalChunks);
-      resp.put("offset", offset);
-      resp.put("complete", confirmed == session.totalChunks);
-      sendJsonResponse(os, resp.toString());
-    } catch (JSONException e) {
-      sendJsonError(os, "Response error");
-    }
-  }
-
   private void handleUploadComplete(String queryStr, OutputStream os) throws IOException {
     String sessionId = extractQueryParam(queryStr, "sessionId");
     if (sessionId == null) {
@@ -1591,13 +1374,10 @@ public class HttpService extends Service {
             "E-Ink Launcher/icon");
         if (!documentsIconDir.exists()) documentsIconDir.mkdirs();
         File documentsIcon = new File(documentsIconDir, session.pkg + ".png");
-        FileInputStream fis = new FileInputStream(dest);
-        FileOutputStream fos2 = new FileOutputStream(documentsIcon);
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = fis.read(buf)) != -1) fos2.write(buf, 0, n);
-        fis.close();
-        fos2.close();
+        try (FileInputStream fis = new FileInputStream(dest);
+             FileOutputStream fos2 = new FileOutputStream(documentsIcon)) {
+          copyStream(fis, fos2);
+        }
       } else if ("install".equals(session.action)) {
         File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
         if (!downloadDir.exists()) downloadDir.mkdirs();
@@ -1647,39 +1427,16 @@ public class HttpService extends Service {
       return;
     }
 
+    int qIdx = fullUri.indexOf('?');
+    String queryStr = qIdx >= 0 ? fullUri.substring(qIdx + 1) : "";
+
     if ("/api/upload/chunk".equals(path)) {
-      String queryStr = fullUri;
-      int qIdx = fullUri.indexOf('?');
-      if (qIdx >= 0) queryStr = fullUri.substring(qIdx + 1);
       handleUploadChunk(queryStr, pis, os);
       return;
     }
 
-    if ("/api/upload/status".equals(path)) {
-      String queryStr = fullUri;
-      int qIdx = fullUri.indexOf('?');
-      if (qIdx >= 0) queryStr = fullUri.substring(qIdx + 1);
-      handleUploadStatus(queryStr, os);
-      return;
-    }
-
     if ("/api/upload/complete".equals(path)) {
-      String queryStr = fullUri;
-      int qIdx2 = fullUri.indexOf('?');
-      if (qIdx2 >= 0) queryStr = fullUri.substring(qIdx2 + 1);
       handleUploadComplete(queryStr, os);
-      return;
-    }
-
-    if ("/api/upload/cancel".equals(path)) {
-      String queryStr = fullUri;
-      int qIdx3 = fullUri.indexOf('?');
-      if (qIdx3 >= 0) queryStr = fullUri.substring(qIdx3 + 1);
-      String sessionId = extractQueryParam(queryStr, "sessionId");
-      if (sessionId != null) {
-        removeSession(sessionId);
-      }
-      sendJsonOk(os);
       return;
     }
 
