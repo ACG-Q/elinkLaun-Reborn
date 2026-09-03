@@ -247,8 +247,7 @@ public class HttpService extends Service {
     if (path.startsWith("/custom_icons/")) { sendCustomIconFile(path, os); return; }
 
     if ("/".equals(path) || "/index.html".equals(path)) { sendAssetFile("index.html", os); return; }
-    if ("/icon-gen.html".equals(path)) { sendAssetFile("icon-gen.html", os); return; }
-    if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/assets/")) { sendAssetFile(path.substring(1), os); return; }
+    if (path.startsWith("/css/") || path.startsWith("/js/")) { sendAssetFile(path.substring(1), os); return; }
 
     File file = new File(rootDir, path);
     if (!file.exists()) { sendResponse(os, 404, "Not Found", "text/html", buildErrorPage(404, "File Not Found")); return; }
