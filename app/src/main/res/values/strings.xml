@@ -71,7 +71,7 @@
     <string name="about_custom_icon_filenames">Custom icon file names:\nLock Screen:  E-ink_Launcher.Lock.png\nWiFi ON:     E-ink_Launcher.WifiOn.png\nWiFi OFF:    E-ink_Launcher.WifiOff.png</string>
     <string name="about_icon_path">Directory: Documents/E-Ink Launcher/icon/</string>
     <string name="about_developers">Developers</string>
-    <string name="about_developer_info">Original: Modificator (yunshangcn@gmail.com)\nCurrent: 六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub: https://github.com/ACG-Q/elinkLaun-Reborn</string>
+    <string name="about_developer_info">Original: Modificator (yunshangcn@gmail.com)\nCurrent: 六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub: https://github.com/ACG-Q/elnkLauncher-Reborn</string>
     <string name="path">Path</string>
     <string name="default_path_setting">Default Path</string>
     <string name="dialog_confim">Confim</string>

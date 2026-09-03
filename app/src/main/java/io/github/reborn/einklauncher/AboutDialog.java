@@ -87,12 +87,12 @@ public class AboutDialog {
 
     // Clickable GitHub link
     SpannableString githubLink = new SpannableString(
-        "https://github.com/ACG-Q/elinkLaun-Reborn");
+        "https://github.com/ACG-Q/elnkLauncher-Reborn");
     githubLink.setSpan(new ClickableSpan() {
       @Override
       public void onClick(android.view.View widget) {
         Intent intent = new Intent(Intent.ACTION_VIEW,
-            Uri.parse("https://github.com/ACG-Q/elinkLaun-Reborn"));
+            Uri.parse("https://github.com/ACG-Q/elnkLauncher-Reborn"));
         context.startActivity(intent);
       }
     }, 0, githubLink.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);

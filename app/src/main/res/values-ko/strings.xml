@@ -37,7 +37,7 @@
     <string name="about_custom_icon_filenames">사용자 지정 아이콘 파일명：\n화면 잠금：E-ink_Launcher.Lock.png\nWiFi 켜짐：E-ink_Launcher.WifiOn.png\nWiFi 꺼짐：E-ink_Launcher.WifiOff.png</string>
     <string name="about_icon_path">디렉토리：Documents/E-Ink Launcher/icon/</string>
     <string name="about_developers">개발자</string>
-    <string name="about_developer_info">원 개발자：Modificator (yunshangcn@gmail.com)\n현 개발자：六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub：https://github.com/ACG-Q/elinkLaun-Reborn</string>
+    <string name="about_developer_info">원 개발자：Modificator (yunshangcn@gmail.com)\n현 개발자：六记 &amp; AI (MiMo V2.5 &amp; Opencode)\nGitHub：https://github.com/ACG-Q/elnkLauncher-Reborn</string>
     <string name="setting_hide_divider">구분선 숨김</string>
     <string name="setting_row_icons">"   행   "</string>
     <string name="setting_set_font_size">폰트 크기 설정</string>

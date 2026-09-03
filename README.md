@@ -2,8 +2,8 @@
 
 专为墨水屏设备打造的极简启动器。
 
-- 原项目：[E-Ink Launcher](https://github.com/nicehash/E-Ink-Launcher)（by Modificator）
-- 本 fork：https://github.com/ACG-Q/elinkLaun-Reborn
+- 原项目：[E-Ink Launcher](https://github.com/Modificator/E-Ink-Launcher)（by Modificator）
+- 本 fork：https://github.com/ACG-Q/elnkLauncher-Reborn
 
 ## 功能
 
@@ -21,13 +21,13 @@
 
 ## 下载
 
-从 [Releases](https://github.com/ACG-Q/elinkLaun-Reborn/releases) 下载最新 APK。
+从 [Releases](https://github.com/ACG-Q/elnkLauncher-Reborn/releases) 下载最新 APK。
 
 ## 本地构建
 
 ```bash
-git clone https://github.com/ACG-Q/elinkLaun-Reborn.git
-cd elinkLaun-Reborn
+git clone https://github.com/ACG-Q/elnkLauncher-Reborn.git
+cd elnkLauncher-Reborn
 ./gradlew assembleRelease
 ```
 

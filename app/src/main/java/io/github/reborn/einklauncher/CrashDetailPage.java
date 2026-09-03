@@ -122,12 +122,12 @@ public class CrashDetailPage extends Activity {
 
     // Clickable GitHub link
     SpannableString githubLink = new SpannableString(
-        "https://github.com/ACG-Q/elinkLaun-Reborn");
+        "https://github.com/ACG-Q/elnkLauncher-Reborn");
     githubLink.setSpan(new ClickableSpan() {
       @Override
       public void onClick(android.view.View widget) {
         Intent intent = new Intent(Intent.ACTION_VIEW,
-            android.net.Uri.parse("https://github.com/ACG-Q/elinkLaun-Reborn"));
+            android.net.Uri.parse("https://github.com/ACG-Q/elnkLauncher-Reborn"));
         startActivity(intent);
       }
     }, 0, githubLink.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -145,20 +145,20 @@ public class CrashDetailPage extends Activity {
         tvContent.append(crashLog);
         fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
             + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n"
+            + "https://github.com/ACG-Q/elnkLauncher-Reborn\n\n"
             + crashLog;
         reader.close();
       } catch (Throwable e) {
         tvContent.append("Failed to read crash file: " + e.getMessage());
         fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
             + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n"
+            + "https://github.com/ACG-Q/elnkLauncher-Reborn\n\n"
             + "Failed to read crash file: " + e.getMessage();
       }
     } else {
       fullErrorText = title + "\n\nPlease screenshot and report the issue.\n"
           + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-          + "https://github.com/ACG-Q/elinkLaun-Reborn\n\n";
+          + "https://github.com/ACG-Q/elnkLauncher-Reborn\n\n";
     }
   }
 
