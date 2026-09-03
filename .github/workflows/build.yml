@@ -35,6 +35,9 @@ jobs:
           npm install
           npx vite build
 
+      - name: Copy Web Assets to Android
+        run: cp -r web/dist/* app/src/main/assets/
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 

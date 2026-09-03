@@ -16,7 +16,7 @@
 #   public *;
 #}
 
--keep public class cn.modificator.launcher.R$*{
+-keep public class io.github.reborn.einklauncher.R$*{
     public static final int *;
 }
 #-keep class org.apache.** {*;}
