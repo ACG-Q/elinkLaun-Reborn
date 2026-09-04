@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.text.TextUtils;
+import android.util.Log;
 import android.text.format.DateFormat;
 import android.view.KeyEvent;
 import android.view.View;
@@ -50,6 +51,7 @@ public class Launcher extends Activity
     implements AppItemBinder.Callback, EInkLauncherView.OnPageChangeListener,
     SettingFragment.OnSettingChangeListener {
 
+  private static final String TAG = "Launcher";
   private static final int REQUEST_DEVICE_ADMIN = 10001;
 
   // ---- Views ----
@@ -279,8 +281,9 @@ public class Launcher extends Activity
 
   @Override
   public void onShowCustomIconChanged(boolean show) {
+    Log.d(TAG, "onShowCustomIconChanged: show=" + show);
     iconCache.markDirty();
-    refreshIcons();
+    refreshIcons(show);
   }
 
   @Override
@@ -306,8 +309,17 @@ public class Launcher extends Activity
   // =========================================================================
 
   private void refreshIcons() {
-    if (adapter == null || iconCache == null) return;
-    iconCache.refreshCustomIcons(getExternalCacheDir() != null, config.isShowCustomIcon());
+    refreshIcons(config.isShowCustomIcon());
+  }
+
+  private void refreshIcons(boolean showCustomIcon) {
+    if (adapter == null || iconCache == null) {
+      Log.w(TAG, "refreshIcons: adapter=" + adapter + ", iconCache=" + iconCache);
+      return;
+    }
+    boolean hasExtCache = getExternalCacheDir() != null;
+    Log.d(TAG, "refreshIcons: hasExternalCacheDir=" + hasExtCache + ", showCustomIcon=" + showCustomIcon);
+    iconCache.refreshCustomIcons(hasExtCache, showCustomIcon);
     adapter.refreshDisplay();
   }
 

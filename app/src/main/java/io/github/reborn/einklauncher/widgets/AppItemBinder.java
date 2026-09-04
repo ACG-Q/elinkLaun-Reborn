@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 
@@ -27,6 +28,8 @@ import io.github.reborn.einklauncher.model.WifiControl;
  * Binder 处理"怎样把数据画到 View 上"以及"用户点了之后做什么"。
  */
 public class AppItemBinder {
+
+  private static final String TAG = "AppItemBinder";
 
   // =========================================================================
   // 回调接口
@@ -217,8 +220,10 @@ public class AppItemBinder {
                          Map<String, File> customIcons) {
     File custom = customIcons != null ? customIcons.get(pkg) : null;
     if (custom != null) {
+      Log.d(TAG, "loadIcon (int): pkg=" + pkg + ", using custom: " + custom.getAbsolutePath());
       iv.setImageURI(Uri.fromFile(custom));
     } else {
+      Log.d(TAG, "loadIcon (int): pkg=" + pkg + ", using default resource");
       iv.setImageResource(defaultRes);
     }
   }
@@ -227,8 +232,10 @@ public class AppItemBinder {
                          Map<String, File> customIcons) {
     File custom = customIcons != null ? customIcons.get(pkg) : null;
     if (custom != null) {
+      Log.d(TAG, "loadIcon (ResolveInfo): pkg=" + pkg + ", using custom: " + custom.getAbsolutePath());
       iv.setImageURI(Uri.fromFile(custom));
     } else {
+      Log.d(TAG, "loadIcon (ResolveInfo): pkg=" + pkg + ", using system icon");
       Drawable icon = iconCache != null
           ? iconCache.getIcon(pkg, info, packageManager)
           : info.loadIcon(packageManager);

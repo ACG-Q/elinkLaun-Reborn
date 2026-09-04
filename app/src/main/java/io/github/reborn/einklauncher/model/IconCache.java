@@ -4,6 +4,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.os.Environment;
+import android.util.Log;
 
 import java.io.File;
 import java.util.Collections;
@@ -21,6 +22,7 @@ import java.util.Map;
  */
 public class IconCache {
 
+  private static final String TAG = "IconCache";
   private static final String ICON_DIR = "E-Ink Launcher" + File.separator + "icon";
 
   private final Map<String, Drawable> drawableCache = new HashMap<>();
@@ -41,29 +43,40 @@ public class IconCache {
    * 如有必要，重新扫描外部存储中的自定义图标目录。
    *
    * @param hasExternalStorage 外部存储是否可用
-   * @param showCustomIcon     用户是否启用"显示自定义图标"（true 表示禁用替换）
+   * @param showCustomIcon     用户是否启用"显示自定义图标"（true 表示启用替换）
    * @return true 表示执行了实际扫描
    */
   public boolean refreshCustomIcons(boolean hasExternalStorage, boolean showCustomIcon) {
+    Log.d(TAG, "refreshCustomIcons: hasExternalStorage=" + hasExternalStorage
+        + ", showCustomIcon=" + showCustomIcon + ", dirty=" + dirty);
     if (!dirty) return false;
     customIconMap.clear();
 
-    if (hasExternalStorage && !showCustomIcon) {
+    if (hasExternalStorage && showCustomIcon) {
       File root = getIconDirectory();
+      Log.d(TAG, "Icon directory: " + root.getAbsolutePath() + ", exists=" + root.exists());
       if (!root.exists()) {
         try {
-          root.mkdirs();
-        } catch (Exception ignored) {
+          boolean created = root.mkdirs();
+          Log.d(TAG, "mkdirs result: " + created);
+        } catch (Exception e) {
+          Log.e(TAG, "mkdirs failed", e);
         }
       }
       File[] files = root.listFiles();
+      Log.d(TAG, "Found files: " + (files != null ? files.length : 0));
       if (files != null) {
         for (File file : files) {
           String name = file.getName();
           int dot = name.lastIndexOf('.');
-          customIconMap.put(dot > 0 ? name.substring(0, dot) : name, file);
+          String pkg = dot > 0 ? name.substring(0, dot) : name;
+          Log.d(TAG, "Custom icon: pkg=" + pkg + ", file=" + file.getAbsolutePath());
+          customIconMap.put(pkg, file);
         }
       }
+    } else {
+      Log.d(TAG, "Skipped scanning: hasExternalStorage=" + hasExternalStorage
+          + ", showCustomIcon=" + showCustomIcon);
     }
     dirty = false;
     return true;

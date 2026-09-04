@@ -32,8 +32,8 @@ public class Config {
   private static final int DEFAULT_APP_NAME_LINES = Integer.MAX_VALUE;
   private static final boolean DEFAULT_HIDE_DIVIDER = true;
   private static final boolean DEFAULT_SHOW_STATUS_BAR = true;
-  private static final boolean DEFAULT_SHOW_CUSTOM_ICON = false;
-  private static final boolean DEFAULT_SHOW_WIFI_NAME = false;
+  private static final boolean DEFAULT_SHOW_CUSTOM_ICON = true;
+  private static final boolean DEFAULT_SHOW_WIFI_NAME = true;
   private static final int DEFAULT_SORT_MODE = 0;
 
   private static final String PREFS_FILE = "launcherPropertyFile";
@@ -47,7 +47,6 @@ public class Config {
   private int appNameLines = -1;
   private boolean hideDivider;
   private boolean showStatusBar;
-  private boolean showCustomIcon;
   private boolean showWifiName;
   private int sortMode = -1;
   private final Set<String> hideApps = new HashSet<>();
@@ -58,7 +57,6 @@ public class Config {
     // 预加载布尔配置
     this.hideDivider = prefs.getBoolean(KEY_HIDE_DIVIDER, DEFAULT_HIDE_DIVIDER);
     this.showStatusBar = prefs.getBoolean(KEY_SHOW_STATUS_BAR, DEFAULT_SHOW_STATUS_BAR);
-    this.showCustomIcon = prefs.getBoolean(KEY_SHOW_CUSTOM_ICON, DEFAULT_SHOW_CUSTOM_ICON);
     this.showWifiName = prefs.getBoolean(KEY_SHOW_WIFI_NAME, DEFAULT_SHOW_WIFI_NAME);
     this.appNameLines = prefs.getInt(KEY_APP_NAME_LINES, DEFAULT_APP_NAME_LINES);
   }
@@ -165,11 +163,10 @@ public class Config {
   // ---- 自定义图标 ----
 
   public boolean isShowCustomIcon() {
-    return showCustomIcon;
+    return prefs.getBoolean(KEY_SHOW_CUSTOM_ICON, DEFAULT_SHOW_CUSTOM_ICON);
   }
 
   public void setShowCustomIcon(boolean show) {
-    this.showCustomIcon = show;
     prefs.edit().putBoolean(KEY_SHOW_CUSTOM_ICON, show).apply();
   }
 

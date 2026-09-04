@@ -14,6 +14,7 @@ import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,6 +30,8 @@ import io.github.reborn.einklauncher.model.AppSortComparator;
 import io.github.reborn.einklauncher.model.WifiControl;
 
 public class SettingFragment extends Fragment implements View.OnClickListener {
+
+  private static final String TAG = "SettingFragment";
 
   public interface OnSettingChangeListener {
     void onRowNumChanged(int rowNum);
@@ -113,8 +116,8 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     showStatusBar.getPaint().setStrikeThruText(config.isShowStatusBar());
     hideDivider.getPaint().setStrikeThruText(config.isHideDivider());
     hideDivider.setText(config.isHideDivider() ? "显示分隔线" : "隐藏分隔线");
-    showCustomIcon.getPaint().setStrikeThruText(config.isShowCustomIcon());
-    showWifiName.getPaint().setStrikeThruText(config.isShowWifiName());
+    showCustomIcon.getPaint().setStrikeThruText(!config.isShowCustomIcon());
+    showWifiName.getPaint().setStrikeThruText(!config.isShowWifiName());
     fontControl.setProgress((int) ((config.getFontSize() - 10) * 10));
   }
 
@@ -262,7 +265,7 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   private void handleShowWifiName() {
     boolean newValue = !config.isShowWifiName();
     config.setShowWifiName(newValue);
-    showWifiName.getPaint().setStrikeThruText(newValue);
+    showWifiName.getPaint().setStrikeThruText(!newValue);
     listener.onShowWifiNameChanged(newValue);
     if (newValue && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 10002);
@@ -272,12 +275,14 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   }
 
   private void handleToggleCustomIcon() {
+    Log.d(TAG, "handleToggleCustomIcon: current value=" + config.isShowCustomIcon());
     Runnable toggleAction = new Runnable() {
       @Override
       public void run() {
         boolean newValue = !config.isShowCustomIcon();
+        Log.d(TAG, "toggleAction.run: newValue=" + newValue);
         config.setShowCustomIcon(newValue);
-        showCustomIcon.getPaint().setStrikeThruText(newValue);
+        showCustomIcon.getPaint().setStrikeThruText(!newValue);
         listener.onShowCustomIconChanged(newValue);
         getActivity().onBackPressed();
       }
@@ -285,11 +290,13 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
         && getActivity().checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
         == PackageManager.PERMISSION_DENIED) {
+      Log.d(TAG, "Storage permission denied, requesting...");
       pendingStorageAction = toggleAction;
       getActivity().requestPermissions(
           new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
               Manifest.permission.WRITE_EXTERNAL_STORAGE}, 10003);
     } else {
+      Log.d(TAG, "Storage permission granted, running toggle action");
       toggleAction.run();
     }
   }
@@ -297,6 +304,8 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
   @Override
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    Log.d(TAG, "onRequestPermissionsResult: requestCode=" + requestCode
+        + ", results=" + java.util.Arrays.toString(grantResults));
     if (requestCode == 10002) {
       if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
         WifiControl.reloadWifiName();
@@ -305,8 +314,10 @@ public class SettingFragment extends Fragment implements View.OnClickListener {
     } else if (requestCode == 10003) {
       if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
           && pendingStorageAction != null) {
+        Log.d(TAG, "Storage permission granted, executing pending action");
         pendingStorageAction.run();
       } else {
+        Log.d(TAG, "Storage permission denied, skipping action");
         getActivity().onBackPressed();
       }
       pendingStorageAction = null;
