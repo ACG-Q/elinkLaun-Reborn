@@ -31,9 +31,9 @@
           </svg>
         </button>
         <h1 class="page-title">{{ currentPageTitle }}</h1>
-        <div class="server-status" :class="serverOnline ? 'online' : 'offline'">
+        <div class="server-status" :class="serverOnline ? 'online' : (serverChecking ? 'checking' : 'offline')">
           <span class="status-dot"></span>
-          {{ serverOnline ? '已连接' : '未连接' }}
+          {{ serverOnline ? '已连接' : (serverChecking ? '检测中...' : '未连接') }}
         </div>
       </header>
       <main class="content">
@@ -50,6 +50,7 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const sidebarOpen = ref(false)
 const serverOnline = ref(false)
+const serverChecking = ref(true)
 
 const navItems = [
   { path: '/', label: '首页', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" /></svg>' },
@@ -78,6 +79,8 @@ async function checkServer() {
     serverOnline.value = res.ok
   } catch {
     serverOnline.value = false
+  } finally {
+    serverChecking.value = false
   }
 }
 

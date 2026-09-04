@@ -7,7 +7,7 @@
       </div>
       <div class="card">
         <div class="card-title">存储</div>
-        <div class="card-value" style="font-size:18px;">{{ stats.totalSizeHuman || '---' }}</div>
+        <div class="card-value" style="font-size:18px;">{{ storageInfo.usedHuman || '---' }} / {{ storageInfo.totalHuman || '---' }}</div>
       </div>
       <div class="card">
         <div class="card-title">电池</div>
@@ -48,19 +48,22 @@ import { ref, onMounted } from 'vue'
 import { getJSON } from '../api'
 
 const stats = ref({})
+const storageInfo = ref({})
 const batteryLevel = ref(0)
 const wifiName = ref('')
 
 onMounted(async () => {
   try {
-    const [s, b, w] = await Promise.all([
+    const [s, b, w, st] = await Promise.all([
       getJSON('/api/stats'),
       getJSON('/api/battery'),
-      getJSON('/api/wifi-status')
+      getJSON('/api/wifi-status'),
+      getJSON('/api/storage')
     ])
     stats.value = s
     batteryLevel.value = b.level || 0
     wifiName.value = w.ssid || ''
+    storageInfo.value = st
   } catch {}
 })
 </script>

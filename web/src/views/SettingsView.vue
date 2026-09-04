@@ -11,18 +11,26 @@
     <div class="card">
       <div v-for="s in volumeStreams" :key="s.key" class="row" style="flex-wrap:wrap;gap:8px;">
         <div style="width:50px;font-size:12px;color:var(--text-muted);">{{ s.label }}</div>
-        <input type="range" min="0" :max="s.max" :value="volume[s.key] || 0"
+        <input type="range" min="0" :max="getVolumeMax(s.key)" :value="getVolumeValue(s.key)"
           @input="e => setVolume(s.key, e.target.value)" style="flex:1;min-width:0;" />
-        <div style="width:24px;font-size:12px;text-align:right;color:var(--text-muted);">{{ volume[s.key] || 0 }}</div>
+        <div style="width:24px;font-size:12px;text-align:right;color:var(--text-muted);">{{ getVolumeValue(s.key) }}</div>
       </div>
     </div>
 
     <h2 style="margin:20px 0 10px;font-size:15px;">亮度</h2>
     <div class="card">
-      <div class="row">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <div style="font-size:14px;font-weight:600;">自动亮度</div>
+          <div style="font-size:12px;color:var(--text-muted);">{{ autoBrightness ? '已开启' : '已关闭' }}</div>
+        </div>
+        <div class="toggle" :class="{ active: autoBrightness }" @click="toggleAutoBrightness"></div>
+      </div>
+      <div class="row" style="margin-top:8px;" :style="{ opacity: autoBrightness ? 0.4 : 1, pointerEvents: autoBrightness ? 'none' : 'auto' }">
         <input type="range" min="0" max="255" :value="brightness" @input="e => setBrightness(e.target.value)" style="flex:1;" />
         <div style="width:32px;font-size:12px;text-align:right;color:var(--text-muted);">{{ brightness }}</div>
       </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">如无法调节，请在系统设置中授予"修改系统设置"权限</div>
     </div>
 
     <h2 style="margin:20px 0 10px;font-size:15px;">屏幕旋转</h2>
@@ -40,7 +48,10 @@
     <div class="card" style="padding:0;">
       <div v-for="s in settingsLinks" :key="s.action" class="row" style="cursor:pointer;" @click="openSettings(s.action)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path :d="s.icon"/></svg>
-        <div class="row-text"><div class="row-title">{{ s.name }}</div></div>
+        <div class="row-text">
+          <div class="row-title">{{ s.name }}</div>
+          <div v-if="s.note" style="font-size:11px;color:var(--text-muted);">{{ s.note }}</div>
+        </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
@@ -57,6 +68,7 @@ const storage = ref({})
 const wifi = ref({})
 const volume = ref({})
 const brightness = ref(128)
+const autoBrightness = ref(false)
 const autoRotate = ref(false)
 
 const batteryColor = computed(() => {
@@ -75,13 +87,25 @@ const volumeStreams = [
   { key: 'alarm', label: '闹钟', max: 7 }
 ]
 
+function getVolumeValue(key) {
+  const v = volume.value[key]
+  if (v && typeof v === 'object') return v.current || 0
+  return v || 0
+}
+
+function getVolumeMax(key) {
+  const v = volume.value[key]
+  if (v && typeof v === 'object') return v.max || 7
+  return 7
+}
+
 const settingsLinks = [
   { name: 'WiFi', action: 'android.settings.WIFI_SETTINGS', icon: 'M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01' },
   { name: '蓝牙', action: 'android.settings.BLUETOOTH_SETTINGS', icon: 'M6.5 6.5l11 11M12 2v20M17 7l-5 5-5-5' },
   { name: '显示', action: 'android.settings.DISPLAY_SETTINGS', icon: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' },
   { name: '声音', action: 'android.settings.SOUND_SETTINGS', icon: 'M9 18V5l12-3v13M9 19c0 1.1-1.3 2-3 2s-3-.9-3-2 1.3-2 3-2 3 .9 3 2z' },
   { name: '应用', action: 'android.settings.APPLICATION_SETTINGS', icon: 'M4 4h16v16H4z' },
-  { name: '开发者选项', action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS', icon: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
+  { name: '开发者选项', action: 'android.settings.APPLICATION_DEVELOPMENT_SETTINGS', icon: 'M16 18l6-6-6-6M8 6l-6 6 6 6', note: '需先在系统设置中启用' },
   { name: '电池', action: 'android.settings.BATTERY_SAVER_SETTINGS', icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
   { name: '存储', action: 'android.settings.INTERNAL_STORAGE_SETTINGS', icon: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z' },
   { name: '通知', action: 'android.settings.NOTIFICATION_LISTENER_SETTINGS', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0' },
@@ -97,18 +121,39 @@ async function loadAll() {
       getJSON('/api/wifi-status'), getJSON('/api/volume'), getJSON('/api/brightness'), getJSON('/api/rotation')
     ])
     device.value = d; battery.value = b; storage.value = s; wifi.value = w
-    volume.value = v; brightness.value = br.value || 128; autoRotate.value = r.enabled || false
+    volume.value = v; brightness.value = br.value || 128; autoBrightness.value = br.autoMode || false; autoRotate.value = r.enabled || false
   } catch {}
 }
 
 async function setVolume(stream, val) {
-  volume.value[stream] = parseInt(val)
+  const numVal = parseInt(val)
+  if (volume.value[stream] && typeof volume.value[stream] === 'object') {
+    volume.value[stream].current = numVal
+  } else {
+    volume.value[stream] = numVal
+  }
   try { await postAction('/api/volume?stream=' + stream + '&value=' + val) } catch {}
 }
 
 async function setBrightness(val) {
   brightness.value = parseInt(val)
-  try { await postAction('/api/brightness?value=' + val) } catch {}
+  try {
+    const r = await postAction('/api/brightness?value=' + val)
+    if (r && r.error) {
+      toast(r.error, 'error')
+    }
+  } catch {}
+}
+
+async function toggleAutoBrightness() {
+  autoBrightness.value = !autoBrightness.value
+  try {
+    const r = await postAction('/api/brightness?autoMode=' + autoBrightness.value)
+    if (r && r.error) {
+      toast(r.error, 'error')
+      autoBrightness.value = !autoBrightness.value
+    }
+  } catch {}
 }
 
 async function toggleRotate() {

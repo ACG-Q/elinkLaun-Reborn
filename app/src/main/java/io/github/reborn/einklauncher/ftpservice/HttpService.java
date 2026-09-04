@@ -38,17 +38,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PushbackInputStream;
 import java.io.RandomAccessFile;
-import java.io.BufferedReader;
+
 import java.lang.reflect.Method;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -58,16 +57,24 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.URLDecoder;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 轻量级 HTTP 文件服务器，用于局域网内浏览器访问设备文件。
@@ -85,26 +92,166 @@ public class HttpService extends Service {
     public static final String ACTION_START_HTTPSERVER = "io.github.reborn.einklauncher.ftpservice.HttpService.ACTION_START_HTTPSERVER";
     public static final String ACTION_STOP_HTTPSERVER = "io.github.reborn.einklauncher.ftpservice.HttpService.ACTION_STOP_HTTPSERVER";
 
+    // ==================== Request Abstraction ====================
+
+    static class Request {
+        final String method;
+        final String path;
+        final String fullUri;
+        final Map<String, String> headers;
+        final String contentLength;
+        final InputStream bodyStream;
+
+        Request(String method, String path, String fullUri, Map<String, String> headers, String contentLength, InputStream bodyStream) {
+            this.method = method;
+            this.path = path;
+            this.fullUri = fullUri;
+            this.headers = headers;
+            this.contentLength = contentLength;
+            this.bodyStream = bodyStream;
+        }
+    }
+
+    // ==================== Route Handler Interface ====================
+
+    interface RouteHandler {
+        void handle(Request req, OutputStream os) throws IOException;
+    }
+
+    // ==================== Upload Action Enum ====================
+
+    enum UploadAction {
+        FILE, ICON_UPLOAD, ICON_REPLACE, INSTALL;
+
+        static UploadAction fromString(String action) {
+            if (action == null) return FILE;
+            switch (action) {
+                case "icon-upload": return ICON_UPLOAD;
+                case "icon-replace": return ICON_REPLACE;
+                case "install": return INSTALL;
+                default: return FILE;
+            }
+        }
+    }
+
+    // ==================== Configuration Constants ====================
+
+    private static final int BUFFER_SIZE = 64 * 1024;
+    private static final int MAX_THREAD_POOL_SIZE = 10;
+    private static final int CLIENT_SOCKET_TIMEOUT = 30000;
+    private static final int MAX_REQUEST_LINE_LENGTH = 8192;
+    private static final int MAX_CONTENT_LENGTH = 100 * 1024 * 1024; // 100MB limit
+    private static final int CHUNK_SIZE = 256 * 1024;
+    private static final long SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+    private static final String CHANNEL_ID = "http_server";
+
+    // ==================== Virtual Icons ====================
+
+    private static final LinkedHashMap<String, int[]> VIRTUAL_ICONS = new LinkedHashMap<>();
+    static {
+        VIRTUAL_ICONS.put("E-ink_Launcher.Lock", new int[]{R.drawable.ic_onekeylock});
+        VIRTUAL_ICONS.put("E-ink_Launcher.WiFi", new int[]{R.drawable.wifi_on});
+        VIRTUAL_ICONS.put("E-ink_Launcher.WiFiOff", new int[]{R.drawable.wifi_off});
+        VIRTUAL_ICONS.put("E-ink_Launcher.HttpServer", new int[]{R.drawable.http_server});
+    }
+
+    private static final String[] VIRTUAL_NAMES = {"OneKey Lock", "WiFi Control", "WiFi Off", "HTTP Server"};
+
+    // ==================== MIME Type Map ====================
+
+    private static final Map<String, String> MIME_MAP = new HashMap<>();
+    static {
+        MIME_MAP.put("html", "text/html; charset=UTF-8");
+        MIME_MAP.put("htm", "text/html; charset=UTF-8");
+        MIME_MAP.put("css", "text/css; charset=UTF-8");
+        MIME_MAP.put("js", "application/javascript; charset=UTF-8");
+        MIME_MAP.put("mjs", "application/javascript; charset=UTF-8");
+        MIME_MAP.put("json", "application/json; charset=UTF-8");
+        MIME_MAP.put("xml", "text/xml; charset=UTF-8");
+        MIME_MAP.put("txt", "text/plain; charset=UTF-8");
+        MIME_MAP.put("log", "text/plain; charset=UTF-8");
+        MIME_MAP.put("png", "image/png");
+        MIME_MAP.put("jpg", "image/jpeg");
+        MIME_MAP.put("jpeg", "image/jpeg");
+        MIME_MAP.put("gif", "image/gif");
+        MIME_MAP.put("webp", "image/webp");
+        MIME_MAP.put("svg", "image/svg+xml");
+        MIME_MAP.put("ico", "image/x-icon");
+        MIME_MAP.put("pdf", "application/pdf");
+        MIME_MAP.put("zip", "application/zip");
+        MIME_MAP.put("mp3", "audio/mpeg");
+        MIME_MAP.put("mp4", "video/mp4");
+        MIME_MAP.put("apk", "application/vnd.android.package-archive");
+        MIME_MAP.put("woff2", "font/woff2");
+        MIME_MAP.put("woff", "font/woff");
+        MIME_MAP.put("ttf", "font/ttf");
+        MIME_MAP.put("map", "application/json");
+    }
+
+    // ==================== Static asset file extensions ====================
+
+    private static final Set<String> STATIC_EXTENSIONS = MIME_MAP.keySet();
+
+    private static String getMimeType(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        if (dot < 0) return "application/octet-stream";
+        String ext = fileName.substring(dot + 1).toLowerCase();
+        String mime = MIME_MAP.get(ext);
+        return mime != null ? mime : "application/octet-stream";
+    }
+
+    // ==================== Instance State ====================
+
     private static volatile int port = DEFAULT_PORT;
     private int pendingPort = -1;
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private volatile boolean running = false;
     private static HttpService instance;
-
-    // --- Chunked Upload ---
-    private static final int CHUNK_SIZE = 256 * 1024;
     private static final ConcurrentHashMap<String, UploadSession> uploadSessions = new ConcurrentHashMap<>();
-    private static final long SESSION_TIMEOUT_MS = 5 * 60 * 1000;
     private static File uploadTempDir;
 
-    // --- Static asset file extensions ---
-    private static final Set<String> STATIC_EXTENSIONS = new HashSet<>(Arrays.asList(
-        ".js", ".css", ".html", ".htm", ".json", ".xml", ".txt", ".log",
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
-        ".pdf", ".zip", ".mp3", ".mp4", ".apk",
-        ".woff", ".woff2", ".ttf", ".map"
-    ));
+    // ==================== Route Tables ====================
+
+    private final Map<String, RouteHandler> getRoutes = new HashMap<>();
+    private final Map<String, RouteHandler> postRoutes = new HashMap<>();
+
+    private void initRoutes() {
+        // GET routes
+        get("GET", "/api/stats", (req, os) -> sendJsonStats(Environment.getExternalStorageDirectory(), os));
+        get("GET", "/api/files", (req, os) -> sendJsonFiles(extractQueryParam(req.fullUri, "path"), Environment.getExternalStorageDirectory(), os));
+        get("GET", "/api/apps", (req, os) -> sendJsonApps(os));
+        get("GET", "/api/app-icon", (req, os) -> sendImageIcon(extractQueryParam(req.fullUri, "pkg"), os));
+        get("GET", "/api/icons", (req, os) -> sendJsonIcons(os));
+        get("GET", "/api/device", (req, os) -> sendJsonDevice(os));
+        get("GET", "/api/battery", (req, os) -> sendJsonBattery(os));
+        get("GET", "/api/storage", (req, os) -> sendJsonStorage(Environment.getExternalStorageDirectory(), os));
+        get("GET", "/api/wifi-status", (req, os) -> sendJsonWifiStatus(os));
+        get("GET", "/api/volume", (req, os) -> sendJsonVolume(os));
+        get("GET", "/api/brightness", (req, os) -> sendJsonBrightness(os));
+        get("GET", "/api/rotation", (req, os) -> sendJsonRotation(os));
+
+        // POST routes
+        post("POST", "/api/upload/start", (req, os) -> handleChunkedUpload(req.path, req.fullUri, req.bodyStream, req.contentLength, os));
+        post("POST", "/api/upload/chunk", (req, os) -> handleChunkedUpload(req.path, req.fullUri, req.bodyStream, req.contentLength, os));
+        post("POST", "/api/upload/complete", (req, os) -> handleChunkedUpload(req.path, req.fullUri, req.bodyStream, req.contentLength, os));
+        post("POST", "/api/volume", (req, os) -> handleSetVolume(req.fullUri, os));
+        post("POST", "/api/brightness", (req, os) -> handleSetBrightness(req.fullUri, os));
+        post("POST", "/api/rotation", (req, os) -> handleSetRotation(req.fullUri, os));
+        post("POST", "/api/icons/assign", (req, os) -> handleIconAssign(req.fullUri, os));
+        post("POST", "/api/open-settings", (req, os) -> handleOpenSettings(req.fullUri, os));
+        post("POST", "/api/app-install", (req, os) -> handleAppInstall(req.fullUri, os));
+        post("POST", "/api/app-uninstall", (req, os) -> handleAppUninstall(req.fullUri, os));
+        post("POST", "/api/app-open", (req, os) -> handleAppOpen(req.fullUri, os));
+    }
+
+    private void get(String method, String path, RouteHandler handler) {
+        getRoutes.put(path, handler);
+    }
+
+    private void post(String method, String path, RouteHandler handler) {
+        postRoutes.put(path, handler);
+    }
 
     // ==================== Preferences ====================
 
@@ -138,6 +285,7 @@ public class HttpService extends Service {
         createNotificationChannel();
         getUploadTempDir();
         startCleanupTimer();
+        initRoutes();
     }
 
     @Override
@@ -161,17 +309,22 @@ public class HttpService extends Service {
     public void onDestroy() {
         instance = null;
         running = false;
+        stopCleanupTimer();
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
+                Log.d(TAG, "Server socket closed");
             }
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            Log.w(TAG, "Error closing server socket: " + e.getMessage());
+        }
         if (threadPool != null) {
             threadPool.shutdownNow();
+            Log.d(TAG, "Thread pool shut down");
         }
         stopForeground(true);
         sendBroadcast(new Intent(ACTION_STOPPED));
-        Log.i(TAG, "HTTP server stopped");
+        Log.i(TAG, "HTTP server stopped on port " + port);
         super.onDestroy();
     }
 
@@ -201,115 +354,142 @@ public class HttpService extends Service {
             }
             serverSocket = new ServerSocket(port);
             serverSocket.setReuseAddress(true);
-            threadPool = Executors.newCachedThreadPool();
+            threadPool = Executors.newFixedThreadPool(MAX_THREAD_POOL_SIZE);
             running = true;
             startForegroundWithNotification("Listening on port " + port);
             sendBroadcast(new Intent(ACTION_STARTED));
-            Log.i(TAG, "HTTP server started on port " + port);
+            Log.i(TAG, "HTTP server started on port " + port + " with thread pool size " + MAX_THREAD_POOL_SIZE);
 
             while (running) {
                 try {
                     Socket client = serverSocket.accept();
+                    Log.d(TAG, "New connection from " + client.getRemoteSocketAddress());
                     threadPool.execute(() -> handleClient(client));
                 } catch (IOException e) {
                     if (running) {
-                        Log.e(TAG, "Accept error", e);
+                        Log.e(TAG, "Accept error: " + e.getMessage(), e);
                     }
                 }
             }
         } catch (IOException e) {
-            Log.e(TAG, "Failed to start server", e);
+            Log.e(TAG, "Failed to start server on port " + port + ": " + e.getMessage(), e);
             sendBroadcast(new Intent(ACTION_FAILEDTOSTART));
         }
     }
 
     private void handleClient(Socket client) {
         try {
-            client.setSoTimeout(30000);
-            InputStream is = client.getInputStream();
-            OutputStream os = client.getOutputStream();
+            client.setSoTimeout(CLIENT_SOCKET_TIMEOUT);
+            try (InputStream is = new BufferedInputStream(client.getInputStream(), BUFFER_SIZE);
+                 OutputStream os = client.getOutputStream()) {
 
-            PushbackInputStream pis = new PushbackInputStream(is, 8192);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(pis, "UTF-8"));
-            String requestLine = reader.readLine();
-            if (requestLine == null || requestLine.isEmpty()) {
-                client.close();
-                return;
-            }
+                Request req = parseRequest(is, client);
+                if (req == null) return;
 
-            String[] parts = requestLine.split(" ");
-            if (parts.length < 2) {
-                client.close();
-                return;
-            }
+                RouteHandler handler = null;
+                if ("GET".equals(req.method)) {
+                    handler = getRoutes.get(req.path);
+                } else if ("POST".equals(req.method)) {
+                    handler = postRoutes.get(req.path);
+                    if (handler == null && req.path.startsWith("/api/icons/upload")) {
+                        handler = (r, out) -> handleChunkedUpload("/api/upload/start", r.fullUri, null, r.contentLength, out);
+                    }
+                    if (handler == null && req.path.startsWith("/api/icons/replace")) {
+                        handler = (r, out) -> handleChunkedUpload("/api/upload/start", r.fullUri, null, r.contentLength, out);
+                    }
+                } else if ("DELETE".equals(req.method)) {
+                    if (req.path.startsWith("/api/files")) {
+                        handler = (r, out) -> handleDelete(r.path, r.fullUri, Environment.getExternalStorageDirectory(), out);
+                    }
+                }
 
-            String method = parts[0];
-            String uri = parts[1];
-
-            String path;
-            int qIdx = uri.indexOf('?');
-            if (qIdx >= 0) {
-                path = URLDecoder.decode(uri.substring(0, qIdx), "UTF-8");
-            } else {
-                path = URLDecoder.decode(uri, "UTF-8");
-            }
-
-            String contentLengthStr = null;
-            String line;
-            while ((line = reader.readLine()) != null && !line.isEmpty()) {
-                String lower = line.toLowerCase();
-                if (lower.startsWith("content-length:")) {
-                    contentLengthStr = line.substring(15).trim();
+                if (handler != null) {
+                    handler.handle(req, os);
+                } else if ("GET".equals(req.method)) {
+                    handleGetFallback(req, os);
+                } else {
+                    sendResponse(os, 405, "Method Not Allowed", "text/plain", "405 Method Not Allowed");
                 }
             }
-
-            File rootDir = Environment.getExternalStorageDirectory();
-
-            if ("GET".equals(method)) {
-                handleGet(path, uri, rootDir, os);
-            } else if ("POST".equals(method)) {
-                handlePost(path, uri, rootDir, pis, contentLengthStr, os);
-            } else if ("DELETE".equals(method)) {
-                handleDelete(path, uri, rootDir, os);
-            } else {
-                sendResponse(os, 405, "Method Not Allowed", "text/plain", "405 Method Not Allowed");
-            }
-
-            client.close();
         } catch (Exception e) {
             Log.e(TAG, "Handle client error", e);
+        } finally {
             try { client.close(); } catch (IOException ignored) {}
         }
     }
 
-    // ==================== GET Routing ====================
+    private Request parseRequest(InputStream is, Socket client) throws IOException {
+        String requestLine = readLine(is);
+        if (requestLine == null || requestLine.isEmpty()) {
+            Log.d(TAG, "Empty request from " + client.getRemoteSocketAddress());
+            client.close();
+            return null;
+        }
+        if (requestLine.length() > MAX_REQUEST_LINE_LENGTH) {
+            Log.w(TAG, "Request line too long (" + requestLine.length() + " chars) from " + client.getRemoteSocketAddress());
+            sendResponse(client.getOutputStream(), 414, "Request URI Too Long", "text/plain", "414 Request URI Too Long");
+            client.close();
+            return null;
+        }
+        Log.d(TAG, "Request from " + client.getRemoteSocketAddress() + ": " + requestLine);
 
-    private void handleGet(String path, String fullUri, File rootDir, OutputStream os) throws IOException {
-        // --- JSON API ---
-        if ("/api/stats".equals(path)) { sendJsonStats(rootDir, os); return; }
-        if ("/api/files".equals(path)) { sendJsonFiles(extractQueryParam(fullUri, "path"), rootDir, os); return; }
-        if ("/api/apps".equals(path)) { sendJsonApps(os); return; }
-        if ("/api/app-icon".equals(path)) { sendImageIcon(extractQueryParam(fullUri, "pkg"), os); return; }
-        if ("/api/icons".equals(path)) { sendJsonIcons(os); return; }
-        if ("/api/device".equals(path)) { sendJsonDevice(os); return; }
-        if ("/api/battery".equals(path)) { sendJsonBattery(os); return; }
-        if ("/api/storage".equals(path)) { sendJsonStorage(rootDir, os); return; }
-        if ("/api/wifi-status".equals(path)) { sendJsonWifiStatus(os); return; }
-        if ("/api/volume".equals(path)) { sendJsonVolume(os); return; }
-        if ("/api/brightness".equals(path)) { sendJsonBrightness(os); return; }
-        if ("/api/rotation".equals(path)) { sendJsonRotation(os); return; }
+        String[] parts = requestLine.split(" ");
+        if (parts.length < 2) {
+            Log.w(TAG, "Malformed request line: " + requestLine);
+            sendResponse(client.getOutputStream(), 400, "Bad Request", "text/plain", "400 Bad Request");
+            client.close();
+            return null;
+        }
 
-        // --- Custom icons ---
-        if (path.startsWith("/custom_icons/")) { sendCustomIconFile(path, os); return; }
+        String method = parts[0];
+        String uri = parts[1];
+        String path = uri.indexOf('?') >= 0 ? URLDecoder.decode(uri.substring(0, uri.indexOf('?')), "UTF-8") : URLDecoder.decode(uri, "UTF-8");
 
-        // --- Web UI: index.html ---
+        Map<String, String> headers = new HashMap<>();
+        String contentLengthStr = null;
+        String line;
+        while ((line = readLine(is)) != null && !line.isEmpty()) {
+            String lower = line.toLowerCase();
+            if (lower.startsWith("content-length:")) {
+                contentLengthStr = line.substring(15).trim();
+            }
+            int colonIdx = line.indexOf(':');
+            if (colonIdx > 0) {
+                headers.put(line.substring(0, colonIdx).trim().toLowerCase(), line.substring(colonIdx + 1).trim());
+            }
+        }
+
+        if (contentLengthStr != null) {
+            try {
+                int contentLength = Integer.parseInt(contentLengthStr);
+                if (contentLength > MAX_CONTENT_LENGTH) {
+                    Log.w(TAG, "Content-Length exceeds limit: " + contentLength);
+                    sendResponse(client.getOutputStream(), 413, "Payload Too Large", "text/plain", "413 Payload Too Large");
+                    client.close();
+                    return null;
+                }
+            } catch (NumberFormatException e) {
+                Log.w(TAG, "Invalid Content-Length: " + contentLengthStr);
+            }
+        }
+
+        return new Request(method, path, uri, headers, contentLengthStr, is);
+    }
+
+    private void handleGetFallback(Request req, OutputStream os) throws IOException {
+        String path = req.path;
+        File rootDir = Environment.getExternalStorageDirectory();
+
+        if (path.startsWith("/custom_icons/")) {
+            sendCustomIconFile(path, os);
+            return;
+        }
+
         if ("/".equals(path) || "/index.html".equals(path)) {
             sendAssetFile("index.html", os);
             return;
         }
 
-        // --- Static assets from Android assets/ directory ---
-        // Handles Vite-built flat file structure (e.g. /index-DXHHVp9j.js, /index-BkFr89pq.css)
         if (isStaticAsset(path)) {
             String assetPath = path.startsWith("/") ? path.substring(1) : path;
             if (assetExists(assetPath)) {
@@ -318,19 +498,57 @@ public class HttpService extends Service {
             }
         }
 
-        // --- File system: directories ---
         File file = new File(rootDir, path);
         if (!file.exists()) {
+            Log.d(TAG, "File not found: " + path);
             sendResponse(os, 404, "Not Found", "text/html", buildErrorPage(404, "File Not Found"));
+            return;
+        }
+        if (!isPathSafe(path, rootDir)) {
+            Log.w(TAG, "Path traversal attempt blocked: " + path);
+            sendResponse(os, 403, "Forbidden", "text/html", buildErrorPage(403, "Access Denied"));
             return;
         }
         if (file.isDirectory()) {
             sendJsonFiles(file.getAbsolutePath(), rootDir, os);
             return;
         }
-
-        // --- File system: regular files ---
         sendFile(file, os);
+    }
+
+    private String readLine(InputStream is) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        int cur;
+        while ((cur = is.read()) != -1) {
+            if (cur == '\n') {
+                break;
+            }
+            if (cur != '\r') {
+                sb.append((char) cur);
+            }
+        }
+        if (cur == -1 && sb.length() == 0) {
+            return null;
+        }
+        return sb.toString();
+    }
+
+    // ==================== Security Helpers ====================
+
+    private boolean isPathSafe(String path, File rootDir) {
+        try {
+            File file = path.startsWith("/") ? new File(rootDir, path) : new File(path);
+            String canonicalPath = file.getCanonicalPath();
+            String rootPath = rootDir.getCanonicalPath();
+            return canonicalPath.startsWith(rootPath);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private boolean isValidPackageName(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return false;
+        return pkg.matches("^[a-zA-Z0-9_][a-zA-Z0-9._]*$");
     }
 
     // ==================== Static File Serving ====================
@@ -344,9 +562,7 @@ public class HttpService extends Service {
     }
 
     private boolean assetExists(String assetPath) {
-        try {
-            InputStream is = getAssets().open(assetPath);
-            is.close();
+        try (InputStream is = getAssets().open(assetPath)) {
             return true;
         } catch (IOException e) {
             return false;
@@ -354,18 +570,12 @@ public class HttpService extends Service {
     }
 
     private void sendAssetFile(String assetPath, OutputStream os) throws IOException {
-        InputStream is = null;
-        try {
-            is = getAssets().open(assetPath);
+        try (InputStream is = getAssets().open(assetPath)) {
             String mime = getMimeType(assetPath);
             byte[] fileBytes = readAllBytes(is);
             sendBinaryResponse(os, 200, "OK", mime, fileBytes);
         } catch (IOException e) {
             sendResponse(os, 404, "Not Found", "text/plain", "404 Not Found");
-        } finally {
-            if (is != null) {
-                try { is.close(); } catch (IOException ignored) {}
-            }
         }
     }
 
@@ -377,34 +587,6 @@ public class HttpService extends Service {
         try (FileInputStream fis = new FileInputStream(file)) {
             copyStream(fis, os);
         }
-    }
-
-    // ==================== MIME Type ====================
-
-    private static String getMimeType(String path) {
-        String lower = path.toLowerCase();
-        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html; charset=UTF-8";
-        if (lower.endsWith(".css")) return "text/css; charset=UTF-8";
-        if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript; charset=UTF-8";
-        if (lower.endsWith(".json")) return "application/json; charset=UTF-8";
-        if (lower.endsWith(".xml")) return "text/xml; charset=UTF-8";
-        if (lower.endsWith(".txt") || lower.endsWith(".log")) return "text/plain; charset=UTF-8";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".gif")) return "image/gif";
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".svg")) return "image/svg+xml";
-        if (lower.endsWith(".ico")) return "image/x-icon";
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        if (lower.endsWith(".zip")) return "application/zip";
-        if (lower.endsWith(".mp3")) return "audio/mpeg";
-        if (lower.endsWith(".mp4")) return "video/mp4";
-        if (lower.endsWith(".apk")) return "application/vnd.android.package-archive";
-        if (lower.endsWith(".woff2")) return "font/woff2";
-        if (lower.endsWith(".woff")) return "font/woff";
-        if (lower.endsWith(".ttf")) return "font/ttf";
-        if (lower.endsWith(".map")) return "application/json";
-        return "application/octet-stream";
     }
 
     // ==================== JSON API: Stats & Files ====================
@@ -428,7 +610,8 @@ public class HttpService extends Service {
             json.put("totalSizeHuman", formatSize(total));
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build stats JSON: " + e.getMessage());
+            throw new IOException("JSON error while building stats", e);
         }
     }
 
@@ -459,7 +642,8 @@ public class HttpService extends Service {
             json.put("items", arr);
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build file list JSON: " + e.getMessage());
+            throw new IOException("JSON error while building file list", e);
         }
     }
 
@@ -486,7 +670,8 @@ public class HttpService extends Service {
             json.put("items", arr);
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build apps list JSON: " + e.getMessage());
+            throw new IOException("JSON error while building apps list", e);
         }
     }
 
@@ -504,6 +689,16 @@ public class HttpService extends Service {
             JSONObject json = new JSONObject();
             JSONArray arr = new JSONArray();
 
+            int idx = 0;
+            for (Map.Entry<String, int[]> entry : VIRTUAL_ICONS.entrySet()) {
+                JSONObject item = new JSONObject();
+                item.put("name", VIRTUAL_NAMES[idx++]);
+                item.put("packageName", entry.getKey());
+                item.put("isVirtual", true);
+                item.put("hasCustomIcon", new File(iconDir, entry.getKey() + ".png").exists());
+                arr.put(item);
+            }
+
             for (ResolveInfo ri : list) {
                 if ("io.github.reborn.einklauncher.Launcher".equals(ri.activityInfo.name)) continue;
                 String pkg = ri.activityInfo.packageName;
@@ -514,21 +709,11 @@ public class HttpService extends Service {
                 arr.put(item);
             }
 
-            String[] virtualPkgs = {"E-ink_Launcher.Lock", "E-ink_Launcher.WiFi", "E-ink_Launcher.WiFiOff", "E-ink_Launcher.HttpServer"};
-            String[] virtualNames = {"OneKey Lock", "WiFi Control", "WiFi Off", "HTTP Server"};
-            for (int i = 0; i < virtualPkgs.length; i++) {
-                JSONObject item = new JSONObject();
-                item.put("name", virtualNames[i]);
-                item.put("packageName", virtualPkgs[i]);
-                item.put("isVirtual", true);
-                item.put("hasCustomIcon", new File(iconDir, virtualPkgs[i] + ".png").exists());
-                arr.put(item);
-            }
-
             json.put("items", arr);
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build icons list JSON: " + e.getMessage());
+            throw new IOException("JSON error while building icons list", e);
         }
     }
 
@@ -539,34 +724,47 @@ public class HttpService extends Service {
         }
         try {
             Bitmap icon = null;
-            if ("E-ink_Launcher.Lock".equals(pkg)) {
-                icon = BitmapFactory.decodeResource(getResources(), R.drawable.ic_onekeylock);
-            } else if ("E-ink_Launcher.WiFi".equals(pkg)) {
-                icon = BitmapFactory.decodeResource(getResources(), R.drawable.wifi_on);
-            } else if ("E-ink_Launcher.HttpServer".equals(pkg)) {
-                icon = BitmapFactory.decodeResource(getResources(), R.drawable.http_server);
-            } else if ("E-ink_Launcher.WiFiOff".equals(pkg)) {
-                icon = BitmapFactory.decodeResource(getResources(), R.drawable.wifi_off);
-            } else {
-                Drawable d = getPackageManager().getApplicationIcon(pkg);
-                icon = drawableToBitmap(d);
+
+            File customIcon = new File(getExternalCacheDir(), "custom_icons/" + pkg + ".png");
+            if (!customIcon.exists()) {
+                customIcon = new File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "E-Ink Launcher/icon/" + pkg + ".png");
             }
+            if (customIcon.exists()) {
+                icon = BitmapFactory.decodeFile(customIcon.getAbsolutePath());
+            }
+
+            if (icon == null) {
+                int[] res = VIRTUAL_ICONS.get(pkg);
+                if (res != null) {
+                    icon = BitmapFactory.decodeResource(getResources(), res[0]);
+                } else {
+                    Drawable d = getPackageManager().getApplicationIcon(pkg);
+                    icon = drawableToBitmap(d);
+                }
+            }
+
             if (icon != null) {
-                Bitmap scaled = Bitmap.createScaledBitmap(icon, 96, 96, true);
+                Bitmap scaled = Bitmap.createScaledBitmap(icon, UPLOAD_ICON_SIZE, UPLOAD_ICON_SIZE, true);
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 scaled.compress(Bitmap.CompressFormat.PNG, 100, baos);
-                byte[] body = baos.toByteArray();
-                sendBinaryResponse(os, 200, "OK", "image/png", body);
+                sendBinaryResponse(os, 200, "OK", "image/png", baos.toByteArray());
             } else {
+                Log.w(TAG, "Failed to load icon for package: " + pkg);
                 sendEmptyIcon(os);
             }
+        } catch (SecurityException e) {
+            Log.w(TAG, "Permission denied loading icon for package " + pkg + ": " + e.getMessage());
+            sendEmptyIcon(os);
         } catch (Exception e) {
+            Log.w(TAG, "Error loading icon for package " + pkg + ": " + e.getMessage());
             sendEmptyIcon(os);
         }
     }
 
     private void sendEmptyIcon(OutputStream os) throws IOException {
-        Bitmap bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
+        Bitmap bmp = Bitmap.createBitmap(UPLOAD_ICON_SIZE, UPLOAD_ICON_SIZE, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
         c.drawColor(Color.TRANSPARENT);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -578,21 +776,18 @@ public class HttpService extends Service {
     private void sendCustomIconFile(String path, OutputStream os) throws IOException {
         String fileName = path.substring("/custom_icons/".length());
         if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            Log.w(TAG, "Path traversal attempt in custom icon request: " + path);
             sendResponse(os, 403, "Forbidden", "text/plain", "403 Forbidden");
             return;
         }
         File iconFile = new File(getExternalCacheDir(), "custom_icons/" + fileName);
         if (!iconFile.exists()) {
+            Log.d(TAG, "Custom icon not found: " + fileName);
             sendResponse(os, 404, "Not Found", "text/plain", "404 Not Found");
             return;
         }
-        String mime = "image/png";
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) mime = "image/jpeg";
-        else if (fileName.endsWith(".webp")) mime = "image/webp";
-
+        String mime = getMimeType(fileName);
         byte[] header = buildHeader(200, "OK", mime, iconFile.length(), null);
-        // Add cache header
-        String cacheHeader = "Cache-Control: max-age=86400\r\n";
         byte[] fullHeader = new String(header, "UTF-8").replace("Connection: close\r\n\r\n",
             "Cache-Control: max-age=86400\r\nConnection: close\r\n\r\n").getBytes("UTF-8");
         os.write(fullHeader);
@@ -618,7 +813,8 @@ public class HttpService extends Service {
             json.put("host", Build.HOST);
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build device info JSON: " + e.getMessage());
+            throw new IOException("JSON error while building device info", e);
         }
     }
 
@@ -644,10 +840,13 @@ public class HttpService extends Service {
                 json.put("temperature", String.format("%.1f\u00B0C", temp / 10.0));
                 json.put("voltage", String.format("%.2fV", voltage / 1000.0));
                 json.put("technology", tech != null ? tech : "Unknown");
+            } else {
+                Log.w(TAG, "Battery status unavailable");
             }
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build battery info JSON: " + e.getMessage());
+            throw new IOException("JSON error while building battery info", e);
         }
     }
 
@@ -687,10 +886,15 @@ public class HttpService extends Service {
             json.put("availableHuman", formatSize(available));
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build storage info JSON: " + e.getMessage());
+            throw new IOException("JSON error while building storage info", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to read storage info: " + e.getMessage());
+            sendJsonError(os, "Failed to read storage information: " + e.getMessage());
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void sendJsonWifiStatus(OutputStream os) throws IOException {
         try {
             WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -704,18 +908,32 @@ public class HttpService extends Service {
                     try {
                         android.net.wifi.WifiInfo info = wm.getConnectionInfo();
                         if (info != null) {
-                            json.put("ssid", info.getSSID());
+                            String ssid = info.getSSID();
+                            if (ssid != null && (ssid.contains("<unknown") || ssid.startsWith("0x") || ssid.isEmpty())) {
+                                ssid = null;
+                            }
+                            if (ssid != null) {
+                                ssid = ssid.replace("\"", "");
+                            }
+                            json.put("ssid", ssid);
                             json.put("bssid", info.getBSSID());
                             json.put("rssi", info.getRssi());
                             json.put("linkSpeed", info.getLinkSpeed());
                             json.put("networkId", info.getNetworkId());
                         }
-                    } catch (Exception ignored) {}
+                    } catch (SecurityException e) {
+                        Log.w(TAG, "Permission denied reading WiFi info: " + e.getMessage());
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error reading WiFi info: " + e.getMessage());
+                    }
                 }
+            } else {
+                Log.w(TAG, "WiFi service unavailable");
             }
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build WiFi status JSON: " + e.getMessage());
+            throw new IOException("JSON error while building WiFi status", e);
         }
     }
 
@@ -739,10 +957,13 @@ public class HttpService extends Service {
                 putVolumeStream(json, "ring", am, AudioManager.STREAM_RING);
                 putVolumeStream(json, "notification", am, AudioManager.STREAM_NOTIFICATION);
                 putVolumeStream(json, "alarm", am, AudioManager.STREAM_ALARM);
+            } else {
+                Log.w(TAG, "Audio service unavailable");
             }
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
-            throw new IOException("JSON error", e);
+            Log.e(TAG, "Failed to build volume info JSON: " + e.getMessage());
+            throw new IOException("JSON error while building volume info", e);
         }
     }
 
@@ -757,11 +978,17 @@ public class HttpService extends Service {
     private void sendJsonBrightness(OutputStream os) throws IOException {
         try {
             int brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+            int mode = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, 0);
             JSONObject json = new JSONObject();
             json.put("value", brightness);
+            json.put("autoMode", mode == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC);
             sendJsonResponse(os, json.toString());
+        } catch (SecurityException e) {
+            Log.w(TAG, "Permission denied reading brightness: " + e.getMessage());
+            sendJsonError(os, "Permission denied: cannot read brightness settings");
         } catch (Exception e) {
-            sendJsonError(os, "Cannot read brightness");
+            Log.e(TAG, "Failed to read brightness: " + e.getMessage());
+            sendJsonError(os, "Failed to read brightness: " + e.getMessage());
         }
     }
 
@@ -771,110 +998,116 @@ public class HttpService extends Service {
             JSONObject json = new JSONObject();
             json.put("enabled", rotation == 1);
             sendJsonResponse(os, json.toString());
+        } catch (SecurityException e) {
+            Log.w(TAG, "Permission denied reading rotation: " + e.getMessage());
+            sendJsonError(os, "Permission denied: cannot read rotation settings");
         } catch (Exception e) {
-            sendJsonError(os, "Cannot read rotation");
+            Log.e(TAG, "Failed to read rotation: " + e.getMessage());
+            sendJsonError(os, "Failed to read rotation: " + e.getMessage());
         }
     }
 
-    // ==================== POST Routing ====================
-
-    private void handlePost(String path, String fullUri, File rootDir, PushbackInputStream pis,
-        String contentLengthStr, OutputStream os) throws IOException {
-        if (path.startsWith("/api/upload")) {
-            handleChunkedUpload(path, fullUri, pis, contentLengthStr, os);
-            return;
-        }
-        if (path.startsWith("/api/volume")) {
-            handleSetVolume(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/brightness")) {
-            handleSetBrightness(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/rotation")) {
-            handleSetRotation(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/icons/upload") || path.startsWith("/api/icons/replace")) {
-            handleChunkedUpload("/api/upload/start", fullUri, pis, contentLengthStr, os);
-            return;
-        }
-        if (path.startsWith("/api/icons/assign")) {
-            handleIconAssign(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/open-settings")) {
-            handleOpenSettings(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/app-install")) {
-            handleAppInstall(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/app-uninstall")) {
-            handleAppUninstall(fullUri, os);
-            return;
-        }
-        if (path.startsWith("/api/app-open")) {
-            handleAppOpen(fullUri, os);
-            return;
-        }
-        sendResponse(os, 404, "Not Found", "application/json", "{\"error\":\"Unknown POST endpoint\"}");
-    }
+    // ==================== POST Handlers ====================
 
     private void handleSetVolume(String fullUri, OutputStream os) throws IOException {
         try {
             String streamName = extractQueryParam(fullUri, "stream");
             String valueStr = extractQueryParam(fullUri, "value");
+            
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            if (am == null || streamName == null || valueStr == null) {
-                sendJsonError(os, "Missing parameters");
+            if (am == null) {
+                sendJsonError(os, "Audio service not available");
                 return;
             }
+            if (!requireParam(streamName, "stream", os)) return;
+            if (!requireParam(valueStr, "value", os)) return;
+            
             int streamType;
             switch (streamName) {
                 case "music": streamType = AudioManager.STREAM_MUSIC; break;
                 case "ring": streamType = AudioManager.STREAM_RING; break;
                 case "notification": streamType = AudioManager.STREAM_NOTIFICATION; break;
                 case "alarm": streamType = AudioManager.STREAM_ALARM; break;
-                default: sendJsonError(os, "Invalid stream"); return;
+                default: 
+                    sendJsonError(os, "Invalid stream '" + streamName + "'. Valid values: music, ring, notification, alarm"); 
+                    return;
             }
-            int value = Integer.parseInt(valueStr);
+            
+            int value = parseIntParam(valueStr, "volume", os);
+            if (value == Integer.MIN_VALUE) return;
+            
+            int maxVolume = am.getStreamMaxVolume(streamType);
+            int minVolume = am.getStreamMinVolume(streamType);
+            if (value < minVolume || value > maxVolume) {
+                sendJsonError(os, "Volume value " + value + " out of range [" + minVolume + ", " + maxVolume + "]");
+                return;
+            }
             am.setStreamVolume(streamType, value, 0);
             sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot modify volume settings");
         } catch (Exception e) {
-            sendJsonError(os, "Volume error");
+            sendJsonError(os, "Volume error: " + e.getMessage());
         }
     }
 
     private void handleSetBrightness(String fullUri, OutputStream os) throws IOException {
         try {
-            String brightnessStr = extractQueryParam(fullUri, "value");
-            if (brightnessStr == null) {
-                sendJsonError(os, "Missing value");
+            if (!requireWriteSettings(os)) return;
+
+            String autoModeStr = extractQueryParam(fullUri, "autoMode");
+            if (autoModeStr != null) {
+                int mode = "true".equals(autoModeStr)
+                    ? Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+                    : Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL;
+                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, mode);
+                sendJsonOk(os);
                 return;
             }
-            int value = Integer.parseInt(brightnessStr);
+
+            String brightnessStr = extractQueryParam(fullUri, "value");
+            if (!requireParam(brightnessStr, "value", os)) return;
+
+            int value = parseIntParam(brightnessStr, "brightness", os);
+            if (value == Integer.MIN_VALUE) return;
+
+            if (value < 0 || value > 255) {
+                sendJsonError(os, "Brightness value " + value + " out of range [0, 255]");
+                return;
+            }
+            Settings.System.putInt(getContentResolver(),
+                Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
             Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, value);
             sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot modify brightness settings");
         } catch (Exception e) {
-            sendJsonError(os, "Brightness error");
+            sendJsonError(os, "Brightness error: " + e.getMessage());
         }
     }
 
     private void handleSetRotation(String fullUri, OutputStream os) throws IOException {
         try {
             String enabledStr = extractQueryParam(fullUri, "enabled");
-            if (enabledStr == null) {
-                sendJsonError(os, "Missing enabled");
+            if (!requireParam(enabledStr, "enabled", os)) return;
+            if (!requireWriteSettings(os)) return;
+
+            int val;
+            if ("true".equals(enabledStr)) {
+                val = 1;
+            } else if ("false".equals(enabledStr)) {
+                val = 0;
+            } else {
+                sendJsonError(os, "Invalid value '" + enabledStr + "'. Expected 'true' or 'false'");
                 return;
             }
-            int val = "true".equals(enabledStr) ? 1 : 0;
             Settings.System.putInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, val);
             sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot modify rotation settings");
         } catch (Exception e) {
-            sendJsonError(os, "Rotation error");
+            sendJsonError(os, "Rotation error: " + e.getMessage());
         }
     }
 
@@ -882,31 +1115,37 @@ public class HttpService extends Service {
         try {
             String slot = extractQueryParam(fullUri, "slot");
             String icon = extractQueryParam(fullUri, "icon");
-            if (slot == null || icon == null) {
-                sendJsonError(os, "Missing slot or icon");
+            if (slot == null || slot.isEmpty()) {
+                sendJsonError(os, "Missing 'slot' parameter. Expected slot identifier");
+                return;
+            }
+            if (icon == null || icon.isEmpty()) {
+                sendJsonError(os, "Missing 'icon' parameter. Expected icon file path or identifier");
                 return;
             }
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
             prefs.edit().putString("icon_" + slot, icon).apply();
             sendJsonOk(os);
         } catch (Exception e) {
-            sendJsonError(os, "Assign error");
+            sendJsonError(os, "Failed to assign icon: " + e.getMessage());
         }
     }
 
     private void handleOpenSettings(String fullUri, OutputStream os) throws IOException {
+        String action = extractQueryParam(fullUri, "action");
+        if (action == null || action.isEmpty()) {
+            sendJsonError(os, "Missing 'action' parameter");
+            return;
+        }
         try {
-            String action = extractQueryParam(fullUri, "action");
-            if (action != null && !action.isEmpty()) {
-                Intent intent = new Intent(action);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                sendJsonOk(os);
-            } else {
-                sendJsonError(os, "Missing action");
-            }
+            Intent intent = new Intent(action);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: " + action);
         } catch (Exception e) {
-            sendJsonError(os, e.getMessage());
+            sendJsonError(os, "Failed to open settings: " + e.getMessage());
         }
     }
 
@@ -914,12 +1153,20 @@ public class HttpService extends Service {
         try {
             String targetPath = extractQueryParam(fullUri, "path");
             if (targetPath == null || targetPath.isEmpty()) {
-                sendJsonError(os, "Missing path");
+                sendJsonError(os, "Missing 'path' parameter. Expected APK file path");
                 return;
             }
             File apkFile = new File(targetPath);
-            if (!apkFile.exists() || !apkFile.getName().toLowerCase().endsWith(".apk")) {
-                sendJsonError(os, "Invalid APK file");
+            if (!apkFile.exists()) {
+                sendJsonError(os, "APK file not found: " + targetPath);
+                return;
+            }
+            if (!apkFile.getName().toLowerCase().endsWith(".apk")) {
+                sendJsonError(os, "Invalid file type: expected .apk file, got " + apkFile.getName());
+                return;
+            }
+            if (!apkFile.canRead()) {
+                sendJsonError(os, "Cannot read APK file: permission denied");
                 return;
             }
             Intent intent = new Intent(Intent.ACTION_VIEW);
@@ -934,44 +1181,58 @@ public class HttpService extends Service {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot install APK");
         } catch (Exception e) {
-            sendJsonError(os, e.getMessage());
+            sendJsonError(os, "Failed to install APK: " + e.getMessage());
         }
     }
 
     private void handleAppUninstall(String fullUri, OutputStream os) throws IOException {
+        String pkg = extractQueryParam(fullUri, "pkg");
+        if (pkg == null || pkg.isEmpty()) {
+            sendJsonError(os, "Missing 'pkg' parameter. Expected package name");
+            return;
+        }
+        if (!isValidPackageName(pkg)) {
+            sendJsonError(os, "Invalid package name format: " + pkg);
+            return;
+        }
         try {
-            String pkg = extractQueryParam(fullUri, "pkg");
-            if (pkg == null || pkg.isEmpty()) {
-                sendJsonError(os, "Missing pkg");
-                return;
-            }
             Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendJsonOk(os);
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot uninstall package " + pkg);
         } catch (Exception e) {
-            sendJsonError(os, e.getMessage());
+            sendJsonError(os, "Failed to uninstall package: " + e.getMessage());
         }
     }
 
     private void handleAppOpen(String fullUri, OutputStream os) throws IOException {
+        String pkg = extractQueryParam(fullUri, "pkg");
+        if (pkg == null || pkg.isEmpty()) {
+            sendJsonError(os, "Missing 'pkg' parameter. Expected package name");
+            return;
+        }
+        if (!isValidPackageName(pkg)) {
+            sendJsonError(os, "Invalid package name format: " + pkg);
+            return;
+        }
         try {
-            String pkg = extractQueryParam(fullUri, "pkg");
-            if (pkg == null || pkg.isEmpty()) {
-                sendJsonError(os, "Missing pkg");
-                return;
-            }
             Intent launchIntent = getPackageManager().getLaunchIntentForPackage(pkg);
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(launchIntent);
                 sendJsonOk(os);
             } else {
-                sendJsonError(os, "No launch intent");
+                sendJsonError(os, "No launch intent found for package: " + pkg + ". App may not be installed or has no launcher activity");
             }
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: cannot open package " + pkg);
         } catch (Exception e) {
-            sendJsonError(os, e.getMessage());
+            sendJsonError(os, "Failed to open app: " + e.getMessage());
         }
     }
 
@@ -985,9 +1246,21 @@ public class HttpService extends Service {
                     sendJsonError(os, "Missing path");
                     return;
                 }
+                if (!isPathSafe(filePath, rootDir)) {
+                    sendJsonError(os, "Access denied: path outside root directory");
+                    return;
+                }
                 File file = new File(filePath);
-                boolean deleted = file.exists() && file.delete();
-                sendJsonResponse(os, new JSONObject().put("success", deleted).toString());
+                if (!file.exists()) {
+                    sendJsonError(os, "File not found");
+                    return;
+                }
+                boolean deleted = file.delete();
+                if (deleted) {
+                    sendJsonResponse(os, new JSONObject().put("success", true).toString());
+                } else {
+                    sendJsonError(os, "Failed to delete file: permission denied or file in use");
+                }
             } catch (JSONException e) {
                 throw new IOException("JSON error", e);
             }
@@ -997,17 +1270,40 @@ public class HttpService extends Service {
 
     // ==================== Chunked Upload ====================
 
-    private static class UploadSession {
-        String sessionId;
-        File tempFile;
-        String action;
-        String targetPath;
-        String pkg;
-        String fileName;
-        long totalSize;
-        int totalChunks;
-        boolean[] confirmed;
-        long createdAt;
+    private static final int UPLOAD_ICON_SIZE = 96;
+
+    static class UploadSession {
+        final String sessionId;
+        final File tempFile;
+        final UploadAction action;
+        final String targetPath;
+        final String pkg;
+        final String fileName;
+        final long totalSize;
+        final int totalChunks;
+        final boolean[] confirmed;
+        final long createdAt;
+
+        UploadSession(String sessionId, File tempFile, UploadAction action, String targetPath,
+                      String pkg, String fileName, long totalSize) {
+            this.sessionId = sessionId;
+            this.tempFile = tempFile;
+            this.action = action;
+            this.targetPath = targetPath;
+            this.pkg = pkg;
+            this.fileName = fileName;
+            this.totalSize = totalSize;
+            this.totalChunks = (int) Math.ceil((double) totalSize / CHUNK_SIZE);
+            this.confirmed = new boolean[this.totalChunks];
+            this.createdAt = System.currentTimeMillis();
+        }
+
+        boolean isComplete() {
+            for (boolean b : confirmed) {
+                if (!b) return false;
+            }
+            return true;
+        }
     }
 
     private File getUploadTempDir() {
@@ -1018,289 +1314,380 @@ public class HttpService extends Service {
         return uploadTempDir;
     }
 
+    private ScheduledExecutorService cleanupScheduler;
+    private ScheduledFuture<?> cleanupFuture;
+
     private void startCleanupTimer() {
-        new Thread(() -> {
-            while (running) {
-                try {
-                    Thread.sleep(2 * 60 * 1000);
-                } catch (InterruptedException e) {
-                    break;
-                }
-                long now = System.currentTimeMillis();
-                for (String sid : uploadSessions.keySet().toArray(new String[0])) {
-                    UploadSession s = uploadSessions.get(sid);
-                    if (s != null && now - s.createdAt > SESSION_TIMEOUT_MS) {
-                        removeSession(sid);
-                    }
-                }
+        cleanupScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "upload-cleanup");
+            t.setDaemon(true);
+            return t;
+        });
+        cleanupFuture = cleanupScheduler.scheduleWithFixedDelay(
+            this::cleanupExpiredSessions, 2, 2, TimeUnit.MINUTES);
+    }
+
+    private void stopCleanupTimer() {
+        if (cleanupFuture != null) cleanupFuture.cancel(false);
+        if (cleanupScheduler != null) cleanupScheduler.shutdownNow();
+    }
+
+    private void cleanupExpiredSessions() {
+        long now = System.currentTimeMillis();
+        for (String sid : uploadSessions.keySet().toArray(new String[0])) {
+            UploadSession s = uploadSessions.get(sid);
+            if (s != null && now - s.createdAt > SESSION_TIMEOUT_MS) {
+                UploadSession removed = uploadSessions.remove(sid);
+                if (removed != null && removed.tempFile.exists()) removed.tempFile.delete();
             }
-        }, "upload-cleanup").start();
-    }
-
-    private void removeSession(String sessionId) {
-        UploadSession session = uploadSessions.remove(sessionId);
-        if (session != null && session.tempFile.exists()) {
-            session.tempFile.delete();
         }
     }
 
-    private void handleChunkedUpload(String path, String fullUri, PushbackInputStream pis,
-        String contentLengthStr, OutputStream os) throws IOException {
-        if ("/api/upload/start".equals(path)) {
-            int contentLength = 0;
-            if (contentLengthStr != null) {
-                try { contentLength = Integer.parseInt(contentLengthStr); } catch (NumberFormatException ignored) {}
-            }
-            byte[] bodyBytes = readFully(pis, contentLength > 0 ? contentLength : 4096);
-            String body = new String(bodyBytes, "UTF-8");
-            handleUploadStart(body, os);
-            return;
-        }
+    // ==================== Upload Helpers ====================
 
-        int qIdx = fullUri.indexOf('?');
-        String queryStr = qIdx >= 0 ? fullUri.substring(qIdx + 1) : "";
-
-        if ("/api/upload/chunk".equals(path)) {
-            handleUploadChunk(queryStr, pis, os);
-            return;
-        }
-
-        if ("/api/upload/complete".equals(path)) {
-            handleUploadComplete(queryStr, os);
-            return;
-        }
-
-        sendJsonError(os, "Unknown upload endpoint");
-    }
-
-    private void handleUploadStart(String body, OutputStream os) throws IOException {
+    private int parseContentLength(String contentLengthStr) {
+        if (contentLengthStr == null || contentLengthStr.isEmpty()) return 0;
         try {
-            JSONObject req = new JSONObject(body);
-            String filename = req.optString("filename", "");
-            long size = req.optLong("size", 0);
-            String action = req.optString("action", "file");
-            String targetPath = req.optString("targetPath", "");
-            String pkg = req.optString("pkg", "");
-
-            if (filename.isEmpty() || size <= 0) {
-                sendJsonError(os, "Missing filename or size");
-                return;
-            }
-
-            String sessionId = UUID.randomUUID().toString();
-            int totalChunks = (int) Math.ceil((double) size / CHUNK_SIZE);
-            File tempFile = new File(getUploadTempDir(), sessionId + ".part");
-
-            UploadSession session = new UploadSession();
-            session.sessionId = sessionId;
-            session.tempFile = tempFile;
-            session.action = action;
-            session.targetPath = targetPath;
-            session.pkg = pkg;
-            session.fileName = filename;
-            session.totalSize = size;
-            session.totalChunks = totalChunks;
-            session.confirmed = new boolean[totalChunks];
-            session.createdAt = System.currentTimeMillis();
-
-            uploadSessions.put(sessionId, session);
-
-            JSONObject resp = new JSONObject();
-            resp.put("success", true);
-            resp.put("sessionId", sessionId);
-            resp.put("totalChunks", totalChunks);
-            resp.put("chunkSize", CHUNK_SIZE);
-            sendJsonResponse(os, resp.toString());
-        } catch (JSONException e) {
-            sendJsonError(os, "Invalid JSON");
+            return Integer.parseInt(contentLengthStr.trim());
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "Invalid Content-Length: " + contentLengthStr);
+            return 0;
         }
     }
 
-    private void handleUploadChunk(String queryStr, InputStream is, OutputStream os) throws IOException {
-        String sessionId = extractQueryParam(queryStr, "sessionId");
-        String chunkIndexStr = extractQueryParam(queryStr, "chunkIndex");
-
-        if (sessionId == null) {
-            sendJsonError(os, "Missing sessionId");
-            return;
+    private UploadSession requireSession(String sessionId, OutputStream os) throws IOException {
+        if (sessionId == null || sessionId.isEmpty()) {
+            sendJsonError(os, "Missing 'sessionId' parameter");
+            return null;
         }
-
         UploadSession session = uploadSessions.get(sessionId);
         if (session == null) {
-            sendJsonError(os, "Session not found");
-            return;
+            sendJsonError(os, "Session not found or expired: " + sessionId);
+            return null;
         }
+        return session;
+    }
 
-        int chunkIndex;
-        if (chunkIndexStr != null) {
-            try { chunkIndex = Integer.parseInt(chunkIndexStr); } catch (NumberFormatException e) {
-                sendJsonError(os, "Invalid chunkIndex");
-                return;
+    private int requireChunkIndex(String chunkIndexStr, int maxChunks, OutputStream os) throws IOException {
+        if (chunkIndexStr == null || chunkIndexStr.isEmpty()) {
+            sendJsonError(os, "Missing 'chunkIndex' parameter");
+            return -1;
+        }
+        int idx;
+        try {
+            idx = Integer.parseInt(chunkIndexStr);
+        } catch (NumberFormatException e) {
+            sendJsonError(os, "Invalid chunk index: " + chunkIndexStr);
+            return -1;
+        }
+        if (idx < 0 || idx >= maxChunks) {
+            sendJsonError(os, "Chunk index out of range [0, " + (maxChunks - 1) + "]");
+            return -1;
+        }
+        return idx;
+    }
+
+    private void moveFile(File src, File dest) throws IOException {
+        dest.getParentFile().mkdirs();
+        Files.move(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private JSONObject newJsonOk() throws JSONException {
+        return new JSONObject().put("success", true);
+    }
+
+    // ==================== Permission & Settings Helpers ====================
+
+    private boolean requireWriteSettings(OutputStream os) throws IOException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(this)) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to open write settings permission page: " + e.getMessage());
             }
-        } else {
-            sendJsonError(os, "Missing chunkIndex");
+            sendJsonError(os, "Permission denied: please grant \"Modify system settings\" permission");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean requireParam(String value, String name, OutputStream os) throws IOException {
+        if (value == null || value.isEmpty()) {
+            sendJsonError(os, "Missing '" + name + "' parameter");
+            return false;
+        }
+        return true;
+    }
+
+    private int parseIntParam(String valueStr, String name, OutputStream os) throws IOException {
+        if (!requireParam(valueStr, name, os)) return Integer.MIN_VALUE;
+        try {
+            return Integer.parseInt(valueStr);
+        } catch (NumberFormatException e) {
+            sendJsonError(os, "Invalid " + name + " value '" + valueStr + "'. Must be an integer");
+            return Integer.MIN_VALUE;
+        }
+    }
+
+    // ==================== Upload Route Handlers ====================
+
+    private void handleUploadStart(InputStream is, String contentLengthStr, OutputStream os) throws IOException {
+        int contentLength = parseContentLength(contentLengthStr);
+        if (contentLength <= 0 || contentLength > MAX_CONTENT_LENGTH) {
+            sendJsonError(os, "Invalid Content-Length for upload start");
             return;
         }
 
-        if (chunkIndex < 0 || chunkIndex >= session.totalChunks) {
-            sendJsonError(os, "Chunk index out of range");
+        JSONObject req;
+        try {
+            byte[] bodyBytes = readFully(is, contentLength);
+            req = new JSONObject(new String(bodyBytes, "UTF-8"));
+        } catch (JSONException e) {
+            sendJsonError(os, "Invalid JSON: " + e.getMessage());
             return;
         }
+
+        String filename = req.optString("filename", "");
+        long size = req.optLong("size", 0);
+        UploadAction action = UploadAction.fromString(req.optString("action", "file"));
+        String targetPath = req.optString("targetPath", "");
+        String pkg = req.optString("pkg", "");
+
+        if (filename.isEmpty()) {
+            sendJsonError(os, "Missing 'filename'");
+            return;
+        }
+        if (size <= 0) {
+            sendJsonError(os, "Invalid file size: " + size);
+            return;
+        }
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            sendJsonError(os, "Invalid filename");
+            return;
+        }
+
+        String sessionId = UUID.randomUUID().toString();
+        File tempFile = new File(getUploadTempDir(), sessionId + ".part");
+        UploadSession session = new UploadSession(sessionId, tempFile, action, targetPath, pkg, filename, size);
+        uploadSessions.put(sessionId, session);
+
+        Log.i(TAG, "Upload started: " + sessionId + " -> " + filename + " (" + size + " bytes)");
+
+        try {
+            JSONObject resp = newJsonOk()
+                .put("sessionId", sessionId)
+                .put("totalChunks", session.totalChunks)
+                .put("chunkSize", CHUNK_SIZE);
+            sendJsonResponse(os, resp.toString());
+        } catch (JSONException e) {
+            sendJsonError(os, "Response error");
+        }
+    }
+
+    private void handleUploadChunk(String fullUri, InputStream is, String contentLengthStr, OutputStream os) throws IOException {
+        String sessionId = extractQueryParam(fullUri, "sessionId");
+        String chunkIndexStr = extractQueryParam(fullUri, "chunkIndex");
+
+        Log.d(TAG, "Chunk upload: sessionId=" + sessionId + ", chunkIndex=" + chunkIndexStr + ", contentLength=" + contentLengthStr);
+
+        UploadSession session = requireSession(sessionId, os);
+        if (session == null) return;
+
+        int chunkIndex = requireChunkIndex(chunkIndexStr, session.totalChunks, os);
+        if (chunkIndex < 0) return;
 
         if (session.confirmed[chunkIndex]) {
-            long offset = 0;
-            for (int i = 0; i < chunkIndex; i++) {
-                if (session.confirmed[i]) offset += CHUNK_SIZE;
-            }
-            try {
-                JSONObject resp = new JSONObject();
-                resp.put("success", true);
-                resp.put("offset", offset);
-                sendJsonResponse(os, resp.toString());
-            } catch (JSONException e) {
-                sendJsonError(os, "Response error");
-            }
+            sendJsonOk(os);
             return;
         }
 
-        long expectedSize = CHUNK_SIZE;
-        if (chunkIndex == session.totalChunks - 1) {
-            expectedSize = session.totalSize - (long) chunkIndex * CHUNK_SIZE;
+        long expectedSize = (chunkIndex == session.totalChunks - 1)
+            ? session.totalSize - (long) chunkIndex * CHUNK_SIZE
+            : CHUNK_SIZE;
+        int contentLength = parseContentLength(contentLengthStr);
+        if (contentLength > 0 && contentLength < expectedSize) {
+            expectedSize = contentLength;
         }
 
-        RandomAccessFile raf = new RandomAccessFile(session.tempFile, "rw");
-        raf.seek((long) chunkIndex * CHUNK_SIZE);
+        Log.d(TAG, "Chunk " + chunkIndex + ": expectedSize=" + expectedSize);
 
-        byte[] buf = new byte[8192];
         long totalRead = 0;
-        while (totalRead < expectedSize) {
-            int toRead = (int) Math.min(buf.length, expectedSize - totalRead);
-            int read = is.read(buf, 0, toRead);
-            if (read < 0) break;
-            raf.write(buf, 0, read);
-            totalRead += read;
+        try (RandomAccessFile raf = new RandomAccessFile(session.tempFile, "rw")) {
+            raf.seek((long) chunkIndex * CHUNK_SIZE);
+            byte[] buf = new byte[BUFFER_SIZE];
+            while (totalRead < expectedSize) {
+                int toRead = (int) Math.min(buf.length, expectedSize - totalRead);
+                int read = is.read(buf, 0, toRead);
+                if (read < 0) break;
+                raf.write(buf, 0, read);
+                totalRead += read;
+            }
         }
-        raf.close();
+
+        Log.d(TAG, "Chunk " + chunkIndex + ": read " + totalRead + " bytes");
 
         if (totalRead < expectedSize) {
-            sendJsonError(os, "Incomplete chunk: expected " + expectedSize + ", got " + totalRead);
+            sendJsonError(os, "Incomplete chunk: " + totalRead + "/" + expectedSize + " bytes");
             return;
         }
 
         session.confirmed[chunkIndex] = true;
-
-        long offset = 0;
-        for (int i = 0; i < chunkIndex; i++) {
-            if (session.confirmed[i]) offset += CHUNK_SIZE;
-        }
-        offset += totalRead;
+        Log.d(TAG, "Chunk " + chunkIndex + " confirmed for " + sessionId);
 
         try {
-            JSONObject resp = new JSONObject();
-            resp.put("success", true);
-            resp.put("offset", offset);
-            sendJsonResponse(os, resp.toString());
+            long offset = (long) chunkIndex * CHUNK_SIZE + totalRead;
+            sendJsonResponse(os, newJsonOk().put("offset", offset).toString());
         } catch (JSONException e) {
             sendJsonError(os, "Response error");
         }
     }
 
-    private void handleUploadComplete(String queryStr, OutputStream os) throws IOException {
-        String sessionId = extractQueryParam(queryStr, "sessionId");
-        if (sessionId == null) {
-            sendJsonError(os, "Missing sessionId");
-            return;
-        }
+    private void handleUploadComplete(String fullUri, OutputStream os) throws IOException {
+        String sessionId = extractQueryParam(fullUri, "sessionId");
 
-        UploadSession session = uploadSessions.get(sessionId);
-        if (session == null) {
-            sendJsonError(os, "Session not found");
-            return;
-        }
+        UploadSession session = requireSession(sessionId, os);
+        if (session == null) return;
 
-        for (boolean b : session.confirmed) {
-            if (!b) {
-                sendJsonError(os, "Upload incomplete");
-                return;
+        if (!session.isComplete()) {
+            int first = 0;
+            for (int i = 0; i < session.confirmed.length; i++) {
+                if (!session.confirmed[i]) { first = i; break; }
             }
+            sendJsonError(os, "Upload incomplete: chunk " + first + " not uploaded");
+            return;
         }
 
         if (session.tempFile.length() != session.totalSize) {
-            sendJsonError(os, "File size mismatch");
+            sendJsonError(os, "Size mismatch: expected " + session.totalSize + ", got " + session.tempFile.length());
             return;
         }
 
-        String resultPath = null;
-
         try {
-            if ("file".equals(session.action)) {
-                File targetDir = session.targetPath.isEmpty() ? Environment.getExternalStorageDirectory() : new File(session.targetPath);
-                if (!targetDir.exists() || !targetDir.isDirectory()) {
-                    sendJsonError(os, "Target directory invalid");
-                    return;
-                }
-                File dest = new File(targetDir, session.fileName);
-                session.tempFile.renameTo(dest);
-                resultPath = dest.getAbsolutePath();
-            } else if ("icon-upload".equals(session.action)) {
-                File iconDir = new File(getExternalCacheDir(), "custom_icons");
-                if (!iconDir.exists()) iconDir.mkdirs();
-                File dest = new File(iconDir, session.fileName);
-                session.tempFile.renameTo(dest);
-                resultPath = dest.getAbsolutePath();
-            } else if ("icon-replace".equals(session.action)) {
-                if (session.pkg == null || session.pkg.isEmpty()) {
-                    sendJsonError(os, "Missing pkg");
-                    return;
-                }
-                File iconDir = new File(getExternalCacheDir(), "custom_icons");
-                if (!iconDir.exists()) iconDir.mkdirs();
-                File dest = new File(iconDir, session.pkg + ".png");
-                session.tempFile.renameTo(dest);
-                resultPath = dest.getAbsolutePath();
-
-                File documentsIconDir = new File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                    "E-Ink Launcher/icon");
-                if (!documentsIconDir.exists()) documentsIconDir.mkdirs();
-                File documentsIcon = new File(documentsIconDir, session.pkg + ".png");
-                try (FileInputStream fis = new FileInputStream(dest);
-                     FileOutputStream fos2 = new FileOutputStream(documentsIcon)) {
-                    copyStream(fis, fos2);
-                }
-            } else if ("install".equals(session.action)) {
-                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                if (!downloadDir.exists()) downloadDir.mkdirs();
-                File dest = new File(downloadDir, session.fileName);
-                session.tempFile.renameTo(dest);
-                resultPath = dest.getAbsolutePath();
-
-                Intent intent = new Intent(Intent.ACTION_VIEW);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    intent.setDataAndType(
-                        androidx.core.content.FileProvider.getUriForFile(HttpService.this, getPackageName() + ".fileProvider", dest),
-                        "application/vnd.android.package-archive");
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                } else {
-                    intent.setDataAndType(Uri.fromFile(dest), "application/vnd.android.package-archive");
-                }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-        } catch (Exception e) {
-            sendJsonError(os, e.getMessage());
-            return;
-        } finally {
-            removeSession(sessionId);
-        }
-
-        try {
-            JSONObject resp = new JSONObject();
-            resp.put("success", true);
+            String resultPath = finalizeUpload(session);
+            JSONObject resp = newJsonOk();
             if (resultPath != null) resp.put("path", resultPath);
             sendJsonResponse(os, resp.toString());
-        } catch (JSONException e) {
-            sendJsonError(os, "Response error");
+        } catch (SecurityException e) {
+            sendJsonError(os, "Permission denied: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e(TAG, "Upload finalize error: " + e.getMessage(), e);
+            sendJsonError(os, "Upload error: " + e.getMessage());
+        } finally {
+            UploadSession removed = uploadSessions.remove(sessionId);
+            if (removed != null && removed.tempFile.exists()) removed.tempFile.delete();
+        }
+    }
+
+    // ==================== Upload Finalization ====================
+
+    private String finalizeUpload(UploadSession session) throws IOException {
+        switch (session.action) {
+            case FILE: return finalizeFileUpload(session);
+            case ICON_UPLOAD: return finalizeIconUpload(session);
+            case ICON_REPLACE: return finalizeIconReplace(session);
+            case INSTALL: return finalizeInstall(session);
+            default: throw new IOException("Unknown upload action: " + session.action);
+        }
+    }
+
+    private String finalizeFileUpload(UploadSession session) throws IOException {
+        File targetDir = session.targetPath.isEmpty()
+            ? Environment.getExternalStorageDirectory()
+            : new File(session.targetPath);
+        if (!targetDir.exists() || !targetDir.isDirectory()) {
+            throw new IOException("Target directory does not exist: " + targetDir);
+        }
+        File dest = new File(targetDir, session.fileName);
+        moveFile(session.tempFile, dest);
+        Log.i(TAG, "File uploaded: " + dest.getAbsolutePath());
+        return dest.getAbsolutePath();
+    }
+
+    private String finalizeIconUpload(UploadSession session) throws IOException {
+        File iconDir = new File(getExternalCacheDir(), "custom_icons");
+        iconDir.mkdirs();
+        File dest = new File(iconDir, session.fileName);
+        moveFile(session.tempFile, dest);
+        Log.i(TAG, "Icon uploaded: " + dest.getAbsolutePath());
+
+        String pkg = session.fileName.contains(".")
+            ? session.fileName.substring(0, session.fileName.lastIndexOf('.'))
+            : session.fileName;
+        syncIconToDocuments(dest, pkg);
+        return dest.getAbsolutePath();
+    }
+
+    private String finalizeIconReplace(UploadSession session) throws IOException {
+        if (session.pkg == null || !isValidPackageName(session.pkg)) {
+            throw new IOException("Invalid package name: " + session.pkg);
+        }
+        File iconDir = new File(getExternalCacheDir(), "custom_icons");
+        iconDir.mkdirs();
+        File dest = new File(iconDir, session.pkg + ".png");
+        moveFile(session.tempFile, dest);
+        Log.i(TAG, "Icon replaced for: " + session.pkg);
+
+        syncIconToDocuments(dest, session.pkg);
+        return dest.getAbsolutePath();
+    }
+
+    private void syncIconToDocuments(File iconFile, String pkg) {
+        try {
+            File documentsDir = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                "E-Ink Launcher/icon");
+            documentsDir.mkdirs();
+            File dest = new File(documentsDir, pkg + ".png");
+            Files.copy(iconFile.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to sync icon to Documents: " + e.getMessage());
+        }
+    }
+
+    private String finalizeInstall(UploadSession session) throws IOException {
+        File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        downloadDir.mkdirs();
+        File dest = new File(downloadDir, session.fileName);
+        moveFile(session.tempFile, dest);
+        Log.i(TAG, "APK saved: " + dest.getAbsolutePath());
+
+        launchInstaller(dest);
+        return dest.getAbsolutePath();
+    }
+
+    private void launchInstaller(File apkFile) {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            intent.setDataAndType(
+                androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".fileProvider", apkFile),
+                "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+            intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive");
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
+    // ==================== Upload Dispatcher ====================
+
+    private void handleChunkedUpload(String path, String fullUri, InputStream is,
+        String contentLengthStr, OutputStream os) throws IOException {
+        switch (path) {
+            case "/api/upload/start":
+                handleUploadStart(is, contentLengthStr, os);
+                break;
+            case "/api/upload/chunk":
+                handleUploadChunk(fullUri, is, contentLengthStr, os);
+                break;
+            case "/api/upload/complete":
+                handleUploadComplete(fullUri, os);
+                break;
+            default:
+                sendJsonError(os, "Unknown upload endpoint: " + path);
         }
     }
 
@@ -1367,8 +1754,6 @@ public class HttpService extends Service {
 
     // ==================== Notification ====================
 
-    private static final String CHANNEL_ID = "http_server";
-
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
@@ -1404,14 +1789,14 @@ public class HttpService extends Service {
     // ==================== Utility Methods ====================
 
     private static void copyStream(InputStream in, OutputStream out) throws IOException {
-        byte[] buf = new byte[8192];
+        byte[] buf = new byte[BUFFER_SIZE];
         int n;
         while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
     }
 
     private static byte[] readAllBytes(InputStream is) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
+        byte[] buf = new byte[BUFFER_SIZE];
         int n;
         while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
         return baos.toByteArray();
@@ -1435,11 +1820,11 @@ public class HttpService extends Service {
         return null;
     }
 
-    private byte[] readFully(PushbackInputStream pis, int length) throws IOException {
+    private byte[] readFully(InputStream is, int length) throws IOException {
         byte[] data = new byte[length];
         int offset = 0;
         while (offset < length) {
-            int read = pis.read(data, offset, length - offset);
+            int read = is.read(data, offset, length - offset);
             if (read < 0) break;
             offset += read;
         }
@@ -1470,70 +1855,51 @@ public class HttpService extends Service {
 
     // ==================== Network Detection ====================
 
+    @SuppressWarnings("deprecation")
     public static boolean isConnectedToLocalNetwork(Context context) {
-        boolean connected = false;
-        ConnectivityManager cm = (ConnectivityManager) context
-            .getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
-        connected = ni != null
-            && ni.isConnected()
-            && (ni.getType() & (ConnectivityManager.TYPE_WIFI | ConnectivityManager.TYPE_ETHERNET)) != 0;
-        if (!connected) {
+        if (ni != null && ni.isConnected()) {
+            int type = ni.getType();
+            if (type == ConnectivityManager.TYPE_WIFI || type == ConnectivityManager.TYPE_ETHERNET) return true;
+        }
+        // Check WiFi hotspot
+        try {
             WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-            try {
-                Method method = wm.getClass().getDeclaredMethod("isWifiApEnabled");
-                connected = (Boolean) method.invoke(wm);
-            } catch (Exception e) {
-                // ignore
+            Method method = wm.getClass().getDeclaredMethod("isWifiApEnabled");
+            if ((Boolean) method.invoke(wm)) return true;
+        } catch (Exception ignored) {}
+        // Check USB tethering
+        try {
+            for (NetworkInterface netInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (netInterface.getDisplayName().startsWith("rndis")) return true;
             }
-        }
-        if (!connected) {
-            try {
-                for (NetworkInterface netInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                    if (netInterface.getDisplayName().startsWith("rndis")) {
-                        connected = true;
-                    }
-                }
-            } catch (SocketException e) {
-                // ignore
-            }
-        }
-        return connected;
+        } catch (SocketException ignored) {}
+        return false;
     }
 
+    @SuppressWarnings("deprecation")
     public static boolean isConnectedToWifi(Context context) {
-        ConnectivityManager cm = (ConnectivityManager) context
-            .getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
-        return ni != null && ni.isConnected()
-            && ni.getType() == ConnectivityManager.TYPE_WIFI;
+        return ni != null && ni.isConnected() && ni.getType() == ConnectivityManager.TYPE_WIFI;
     }
 
+    @SuppressWarnings("deprecation")
     public static InetAddress getLocalInetAddress(Context context) {
-        if (!isConnectedToLocalNetwork(context)) {
-            return null;
-        }
+        if (!isConnectedToLocalNetwork(context)) return null;
         if (isConnectedToWifi(context)) {
             WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             int ipAddress = wm.getConnectionInfo().getIpAddress();
-            if (ipAddress == 0) return null;
-            return intToInet(ipAddress);
+            if (ipAddress != 0) return intToInet(ipAddress);
         }
         try {
-            Enumeration<NetworkInterface> netinterfaces = NetworkInterface.getNetworkInterfaces();
-            while (netinterfaces.hasMoreElements()) {
-                NetworkInterface netinterface = netinterfaces.nextElement();
-                Enumeration<InetAddress> adresses = netinterface.getInetAddresses();
-                while (adresses.hasMoreElements()) {
-                    InetAddress address = adresses.nextElement();
-                    if (!address.isLoopbackAddress() && !address.isLinkLocalAddress()) {
-                        return address;
-                    }
+            for (NetworkInterface netInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                for (InetAddress address : Collections.list(netInterface.getInetAddresses())) {
+                    if (!address.isLoopbackAddress() && !address.isLinkLocalAddress()) return address;
                 }
             }
-        } catch (Exception e) {
-            // ignore
-        }
+        } catch (Exception ignored) {}
         return null;
     }
 
@@ -1550,21 +1916,14 @@ public class HttpService extends Service {
     }
 
     public static boolean isPortAvailable(int checkPort) {
-        ServerSocket ss = null;
-        DatagramSocket ds = null;
-        try {
-            ss = new ServerSocket(checkPort);
+        try (ServerSocket ss = new ServerSocket(checkPort);
+             DatagramSocket ds = new DatagramSocket(checkPort)) {
             ss.setReuseAddress(true);
-            ds = new DatagramSocket(checkPort);
             ds.setReuseAddress(true);
             return true;
         } catch (IOException e) {
+            Log.d(TAG, "Port " + checkPort + " is not available: " + e.getMessage());
             return false;
-        } finally {
-            if (ds != null) ds.close();
-            if (ss != null) {
-                try { ss.close(); } catch (IOException ignored) {}
-            }
         }
     }
 }
