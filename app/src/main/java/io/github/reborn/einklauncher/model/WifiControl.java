@@ -62,12 +62,12 @@ public class WifiControl {
   }
 
   public static void bind(View view, Map<String, File> iconReplaceMap) {
+    instance.iconReplaceMap = iconReplaceMap;
     if (view == null) {
       instance.appImage = null;
       instance.appName = null;
       return;
     }
-    instance.iconReplaceMap = iconReplaceMap;
     instance.appName = view.findViewById(R.id.appName);
     instance.appImage = view.findViewById(R.id.appImage);
     instance.updateStatus();
