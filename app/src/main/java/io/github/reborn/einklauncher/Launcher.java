@@ -138,6 +138,17 @@ public class Launcher extends Activity
     super.onResume();
     registerDynamicReceivers();
     refreshIcons();
+    // 确保在布局完成后刷新一次，解决首次启动白屏问题
+    if (launcherView != null) {
+      launcherView.post(new Runnable() {
+        @Override
+        public void run() {
+          if (adapter != null) {
+            adapter.refreshDisplay();
+          }
+        }
+      });
+    }
   }
 
   @Override
