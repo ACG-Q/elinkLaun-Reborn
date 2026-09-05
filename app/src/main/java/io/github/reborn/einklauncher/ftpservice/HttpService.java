@@ -1179,13 +1179,39 @@ public class HttpService extends Service {
                 intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive");
             }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
+            sendInstallNotification(apkFile.getName(), intent);
             sendJsonOk(os);
         } catch (SecurityException e) {
             sendJsonError(os, "Permission denied: cannot install APK");
         } catch (Exception e) {
             sendJsonError(os, "Failed to install APK: " + e.getMessage());
         }
+    }
+
+    private void sendInstallNotification(String fileName, Intent installIntent) {
+        String channelId = "install_channel";
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                channelId, "APK 安装", NotificationManager.IMPORTANCE_HIGH);
+            nm.createNotificationChannel(channel);
+        }
+        PendingIntent pi = PendingIntent.getActivity(this, 0, installIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder = new Notification.Builder(this, channelId);
+        } else {
+            builder = new Notification.Builder(this);
+        }
+        Notification notification = builder
+            .setSmallIcon(R.drawable.http_server)
+            .setContentTitle("APK 已就绪")
+            .setContentText("点击安装 " + fileName)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build();
+        nm.notify((int) System.currentTimeMillis(), notification);
     }
 
     private void handleAppUninstall(String fullUri, OutputStream os) throws IOException {
@@ -1653,8 +1679,6 @@ public class HttpService extends Service {
         File dest = new File(downloadDir, session.fileName);
         moveFile(session.tempFile, dest);
         Log.i(TAG, "APK saved: " + dest.getAbsolutePath());
-
-        launchInstaller(dest);
         return dest.getAbsolutePath();
     }
 
