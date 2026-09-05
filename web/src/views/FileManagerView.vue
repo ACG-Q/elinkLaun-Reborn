@@ -35,7 +35,7 @@
       <div v-if="items.length === 0 && !loading" class="empty-state">空目录</div>
     </div>
 
-    <div class="upload-zone" id="uploadZone" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="onDrop">
+    <div class="upload-area" id="uploadZone" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="onDrop">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <div style="font-size:13px;font-weight:500;">点击或拖拽上传文件</div>
       <input ref="fileInput" type="file" multiple style="display:none;" @change="onFileSelect" />
