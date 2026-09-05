@@ -33,7 +33,6 @@ import java.util.Calendar;
 import java.util.Locale;
 import java.util.Set;
 
-import io.github.reborn.einklauncher.ftpservice.HttpService;
 import io.github.reborn.einklauncher.model.AdminReceiver;
 import io.github.reborn.einklauncher.model.AppDataCenter;
 import io.github.reborn.einklauncher.model.HomeEntranceService;

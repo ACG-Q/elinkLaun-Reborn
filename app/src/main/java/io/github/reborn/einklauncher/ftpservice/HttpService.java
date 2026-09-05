@@ -42,7 +42,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -61,10 +60,8 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -238,7 +235,6 @@ public class HttpService extends Service {
         post("POST", "/api/volume", (req, os) -> handleSetVolume(req.fullUri, os));
         post("POST", "/api/brightness", (req, os) -> handleSetBrightness(req.fullUri, os));
         post("POST", "/api/rotation", (req, os) -> handleSetRotation(req.fullUri, os));
-        post("POST", "/api/icons/assign", (req, os) -> handleIconAssign(req.fullUri, os));
         post("POST", "/api/open-settings", (req, os) -> handleOpenSettings(req.fullUri, os));
         post("POST", "/api/app-install", (req, os) -> handleAppInstall(req.fullUri, os));
         post("POST", "/api/app-uninstall", (req, os) -> handleAppUninstall(req.fullUri, os));
@@ -805,12 +801,8 @@ public class HttpService extends Service {
             json.put("manufacturer", Build.MANUFACTURER);
             json.put("brand", Build.BRAND);
             json.put("device", Build.DEVICE);
-            json.put("board", Build.BOARD);
-            json.put("hardware", Build.HARDWARE);
             json.put("release", Build.VERSION.RELEASE);
             json.put("sdkInt", Build.VERSION.SDK_INT);
-            json.put("incremental", Build.VERSION.INCREMENTAL);
-            json.put("host", Build.HOST);
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
             Log.e(TAG, "Failed to build device info JSON: " + e.getMessage());
@@ -828,20 +820,11 @@ public class HttpService extends Service {
                 int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
                 int pct = (level * 100) / scale;
                 int status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-                int health = batteryStatus.getIntExtra(BatteryManager.EXTRA_HEALTH, -1);
                 int temp = batteryStatus.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0);
-                int voltage = batteryStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
-                String tech = batteryStatus.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY);
                 json.put("level", pct);
                 json.put("status", status);
                 json.put("statusText", batteryStatusText(status));
-                json.put("health", health);
-                json.put("healthText", batteryHealthText(health));
                 json.put("temperature", String.format("%.1f\u00B0C", temp / 10.0));
-                json.put("voltage", String.format("%.2fV", voltage / 1000.0));
-                json.put("technology", tech != null ? tech : "Unknown");
-            } else {
-                Log.w(TAG, "Battery status unavailable");
             }
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
@@ -856,17 +839,6 @@ public class HttpService extends Service {
             case BatteryManager.BATTERY_STATUS_DISCHARGING: return "Discharging";
             case BatteryManager.BATTERY_STATUS_FULL: return "Full";
             case BatteryManager.BATTERY_STATUS_NOT_CHARGING: return "Not Charging";
-            default: return "Unknown";
-        }
-    }
-
-    private String batteryHealthText(int health) {
-        switch (health) {
-            case BatteryManager.BATTERY_HEALTH_GOOD: return "Good";
-            case BatteryManager.BATTERY_HEALTH_OVERHEAT: return "Overheat";
-            case BatteryManager.BATTERY_HEALTH_DEAD: return "Dead";
-            case BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE: return "Over Voltage";
-            case BatteryManager.BATTERY_HEALTH_COLD: return "Cold";
             default: return "Unknown";
         }
     }
@@ -909,26 +881,16 @@ public class HttpService extends Service {
                         android.net.wifi.WifiInfo info = wm.getConnectionInfo();
                         if (info != null) {
                             String ssid = info.getSSID();
-                            if (ssid != null && (ssid.contains("<unknown") || ssid.startsWith("0x") || ssid.isEmpty())) {
-                                ssid = null;
+                            if (ssid != null && !ssid.contains("<unknown") && !ssid.startsWith("0x") && !ssid.isEmpty()) {
+                                json.put("ssid", ssid.replace("\"", ""));
                             }
-                            if (ssid != null) {
-                                ssid = ssid.replace("\"", "");
-                            }
-                            json.put("ssid", ssid);
-                            json.put("bssid", info.getBSSID());
                             json.put("rssi", info.getRssi());
                             json.put("linkSpeed", info.getLinkSpeed());
-                            json.put("networkId", info.getNetworkId());
                         }
-                    } catch (SecurityException e) {
-                        Log.w(TAG, "Permission denied reading WiFi info: " + e.getMessage());
                     } catch (Exception e) {
                         Log.w(TAG, "Error reading WiFi info: " + e.getMessage());
                     }
                 }
-            } else {
-                Log.w(TAG, "WiFi service unavailable");
             }
             sendJsonResponse(os, json.toString());
         } catch (JSONException e) {
@@ -953,10 +915,16 @@ public class HttpService extends Service {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
             JSONObject json = new JSONObject();
             if (am != null) {
-                putVolumeStream(json, "music", am, AudioManager.STREAM_MUSIC);
-                putVolumeStream(json, "ring", am, AudioManager.STREAM_RING);
-                putVolumeStream(json, "notification", am, AudioManager.STREAM_NOTIFICATION);
-                putVolumeStream(json, "alarm", am, AudioManager.STREAM_ALARM);
+                String[] keys = {"music", "ring", "notification", "alarm"};
+                int[] streams = {AudioManager.STREAM_MUSIC, AudioManager.STREAM_RING,
+                    AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_ALARM};
+                for (int i = 0; i < keys.length; i++) {
+                    JSONObject s = new JSONObject();
+                    s.put("current", am.getStreamVolume(streams[i]));
+                    s.put("max", am.getStreamMaxVolume(streams[i]));
+                    s.put("min", am.getStreamMinVolume(streams[i]));
+                    json.put(keys[i], s);
+                }
             } else {
                 Log.w(TAG, "Audio service unavailable");
             }
@@ -965,14 +933,6 @@ public class HttpService extends Service {
             Log.e(TAG, "Failed to build volume info JSON: " + e.getMessage());
             throw new IOException("JSON error while building volume info", e);
         }
-    }
-
-    private void putVolumeStream(JSONObject json, String key, AudioManager am, int stream) throws JSONException {
-        JSONObject s = new JSONObject();
-        s.put("current", am.getStreamVolume(stream));
-        s.put("max", am.getStreamMaxVolume(stream));
-        s.put("min", am.getStreamMinVolume(stream));
-        json.put(key, s);
     }
 
     private void sendJsonBrightness(OutputStream os) throws IOException {
@@ -1108,26 +1068,6 @@ public class HttpService extends Service {
             sendJsonError(os, "Permission denied: cannot modify rotation settings");
         } catch (Exception e) {
             sendJsonError(os, "Rotation error: " + e.getMessage());
-        }
-    }
-
-    private void handleIconAssign(String fullUri, OutputStream os) throws IOException {
-        try {
-            String slot = extractQueryParam(fullUri, "slot");
-            String icon = extractQueryParam(fullUri, "icon");
-            if (slot == null || slot.isEmpty()) {
-                sendJsonError(os, "Missing 'slot' parameter. Expected slot identifier");
-                return;
-            }
-            if (icon == null || icon.isEmpty()) {
-                sendJsonError(os, "Missing 'icon' parameter. Expected icon file path or identifier");
-                return;
-            }
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-            prefs.edit().putString("icon_" + slot, icon).apply();
-            sendJsonOk(os);
-        } catch (Exception e) {
-            sendJsonError(os, "Failed to assign icon: " + e.getMessage());
         }
     }
 
