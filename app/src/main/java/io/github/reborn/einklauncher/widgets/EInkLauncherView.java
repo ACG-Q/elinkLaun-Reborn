@@ -203,10 +203,11 @@ public class EInkLauncherView extends ViewGroup {
     rebind();
   }
 
-  /** 请求 adapter 重新绑定所有数据 */
+  /** 请求 adapter 重新绑定所有数据，完成后强制重绘以触发 E-ink 刷新 */
   void rebind() {
     if (adapter != null) {
       adapter.bindAll();
+      invalidate();
     }
   }
 
