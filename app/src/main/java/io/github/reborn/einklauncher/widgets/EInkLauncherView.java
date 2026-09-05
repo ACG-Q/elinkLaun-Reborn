@@ -150,6 +150,11 @@ public class EInkLauncherView extends ViewGroup {
             (col + 1) * cellW, (row + 1) * cellH);
       }
     }
+
+    if (getChildCount() > 0
+        && getChildAt(0).findViewById(R.id.appName).getMeasuredWidth() == 0) {
+      rebind();
+    }
   }
 
   @Override
